@@ -63,7 +63,7 @@
 
         } catch (e) {
             console.error("Erreur Init Firebase:", e);
-            alert("Erreur critique Firebase: " + e.message);
+            alert("Erreur critique: " + e.message);
         }
     </script>
 
@@ -73,17 +73,19 @@
         body {
             font-family: 'Fredoka', sans-serif;
             user-select: none;
-            overflow: hidden;
+            overflow: hidden; /* Prevent pull-to-refresh on mobile */
             touch-action: manipulation;
             background-color: #0f172a;
+            color: #f1f5f9;
         }
 
+        /* Responsive Background */
         .warehouse-bg {
             background-color: #451a03;
             background-image: repeating-linear-gradient(45deg, #78350f 25%, transparent 25%, transparent 75%, #78350f 75%, #78350f), repeating-linear-gradient(45deg, #78350f 25%, transparent 25%, transparent 75%, #78350f 75%, #78350f);
             background-position: 0 0, 10px 10px;
             background-size: 20px 20px;
-            box-shadow: inset 0 0 150px #000;
+            box-shadow: inset 0 0 100px #000;
         }
 
         .coop-area {
@@ -95,225 +97,303 @@
 
         .duck-sprite {
             position: absolute;
-            font-size: 1.8rem;
+            font-size: clamp(1.5rem, 5vw, 2.5rem); /* Responsive size */
             z-index: 10;
             cursor: pointer;
             transition: transform 0.1s;
+            filter: drop-shadow(0 4px 2px rgba(0,0,0,0.3));
         }
         .duck-sprite:active { transform: scale(1.2); }
 
+        /* Custom Scrollbar hidden but functional */
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
         
-        .nav-item.active { color: #fbbf24; border-top: 2px solid #fbbf24; background-color: rgba(30, 41, 59, 0.5); }
-        .bg-airtel { background-color: #e30613; } .text-airtel { color: #e30613; } .border-airtel { border-color: #e30613; }
+        .nav-item.active { 
+            color: #fbbf24; 
+            border-top: 3px solid #fbbf24; 
+            background: linear-gradient(to bottom, rgba(251, 191, 36, 0.1), transparent);
+        }
+        
+        .bg-airtel { background-color: #e30613; } 
+        .text-airtel { color: #e30613; } 
+        .border-airtel { border-color: #e30613; }
         .bg-telegram { background-color: #229ED9; }
 
         .loader-overlay { background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(5px); }
+        
+        /* Mobile Input Fix */
+        input, select, textarea { font-size: 16px !important; } 
     </style>
 </head>
-<body class="bg-slate-900 h-screen w-screen flex flex-col text-slate-100">
+<body class="h-[100dvh] w-screen flex flex-col">
 
     <!-- LOADER -->
-    <div id="globalLoader" class="fixed inset-0 z-[300] bg-slate-900 flex items-center justify-center">
-        <div class="text-center">
-            <div class="text-4xl animate-bounce mb-2">🦆</div>
-            <p class="text-slate-500 text-xs uppercase tracking-widest">Connexion...</p>
-        </div>
+    <div id="globalLoader" class="fixed inset-0 z-[300] bg-slate-900 flex flex-col items-center justify-center">
+        <div class="text-6xl animate-bounce mb-4">🦆</div>
+        <p class="text-slate-500 text-sm uppercase tracking-widest font-bold">Connexion...</p>
     </div>
 
-    <!-- AUTH -->
-    <div id="authView" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900 p-6">
-        <div class="w-full max-w-sm bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-700 relative">
-            <h1 class="text-3xl font-bold text-orange-500 text-center mb-1">EmpireDuck</h1>
-            <p class="text-slate-500 text-xs text-center mb-6 uppercase tracking-widest">Connexion Requise</p>
+    <!-- AUTHENTIFICATION -->
+    <div id="authView" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900 p-4">
+        <div class="w-full max-w-sm bg-slate-800 p-6 sm:p-8 rounded-2xl shadow-2xl border border-slate-700 relative">
+            <h1 class="text-3xl sm:text-4xl font-bold text-orange-500 text-center mb-2">EmpireDuck</h1>
+            <p class="text-slate-500 text-xs sm:text-sm text-center mb-6 uppercase tracking-widest">Gérez votre empire</p>
             
-            <div class="flex mb-4 bg-slate-900 rounded p-1">
-                <button onclick="toggleAuth('login')" id="tabLogin" class="flex-1 py-2 text-xs font-bold rounded bg-slate-700 text-white transition-colors">Connexion</button>
-                <button onclick="toggleAuth('register')" id="tabReg" class="flex-1 py-2 text-xs font-bold rounded text-slate-500 transition-colors">Inscription</button>
+            <div class="flex mb-6 bg-slate-900 p-1 rounded-lg">
+                <button onclick="toggleAuth('login')" id="tabLogin" class="flex-1 py-2 text-sm font-bold rounded-md bg-slate-700 text-white transition-all">Connexion</button>
+                <button onclick="toggleAuth('register')" id="tabReg" class="flex-1 py-2 text-sm font-bold rounded-md text-slate-500 transition-all">Inscription</button>
             </div>
 
-            <div class="space-y-3">
-                <input type="email" id="authEmail" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-orange-500 outline-none transition-colors" placeholder="Email (Gmail)*">
-                <input type="password" id="authPass" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-orange-500 outline-none transition-colors" placeholder="Mot de passe (6+)*">
-                <input type="password" id="authConf" class="hidden w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-orange-500 outline-none transition-colors" placeholder="Confirmer MDP*">
+            <div class="space-y-4">
+                <div class="relative">
+                    <i class="fa-solid fa-envelope absolute left-3 top-3.5 text-slate-500"></i>
+                    <input type="email" id="authEmail" class="w-full bg-slate-900 border border-slate-600 rounded-xl py-3 pl-10 pr-4 text-white focus:border-orange-500 outline-none transition-colors" placeholder="Email (Gmail)">
+                </div>
+                <div class="relative">
+                    <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-500"></i>
+                    <input type="password" id="authPass" class="w-full bg-slate-900 border border-slate-600 rounded-xl py-3 pl-10 pr-4 text-white focus:border-orange-500 outline-none transition-colors" placeholder="Mot de passe">
+                </div>
+                <div class="relative hidden" id="authConfWrapper">
+                    <i class="fa-solid fa-check absolute left-3 top-3.5 text-slate-500"></i>
+                    <input type="password" id="authConf" class="w-full bg-slate-900 border border-slate-600 rounded-xl py-3 pl-10 pr-4 text-white focus:border-orange-500 outline-none transition-colors" placeholder="Confirmer MDP">
+                </div>
                 
-                <div id="authError" class="text-red-400 text-xs text-center p-2 bg-red-900/20 rounded border border-red-900 hidden"></div>
+                <div id="authError" class="text-red-400 text-xs text-center p-2 bg-red-900/20 rounded border border-red-900/50 hidden"></div>
                 
-                <button onclick="handleAuth()" id="authBtn" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-transform">SE CONNECTER</button>
+                <button onclick="handleAuth()" id="authBtn" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 rounded-xl shadow-lg active:scale-95 transition-transform uppercase tracking-wider text-sm">
+                    Se Connecter
+                </button>
             </div>
         </div>
+        <p class="mt-8 text-slate-600 text-xs">EmpireDuck © 2024</p>
     </div>
 
-    <!-- JEU -->
+    <!-- JEU (USINE) -->
     <div id="gameView" class="hidden flex-grow flex-col h-full relative">
-        <div class="bg-slate-800 p-2 shadow-xl flex justify-between items-center z-30 shrink-0 border-b border-slate-600 min-h-[70px]">
-            <div class="flex flex-col justify-center gap-1">
-                <div class="text-[10px] text-slate-400 px-2 py-0.5 rounded border border-slate-700 bg-slate-900 inline-block w-fit truncate max-w-[100px]">
-                    <i class="fa-solid fa-user-circle mr-1"></i><span id="uName">Joueur</span>
+        <!-- Header Responsive -->
+        <div class="bg-slate-800 p-2 sm:p-4 shadow-xl flex justify-between items-center z-30 shrink-0 border-b border-slate-600">
+            <div class="flex flex-col gap-1">
+                <div class="text-xs text-slate-400 px-2 py-1 rounded bg-slate-900 border border-slate-700 inline-flex items-center gap-2 max-w-[140px]">
+                    <i class="fa-solid fa-user-circle"></i>
+                    <span id="uName" class="truncate font-bold">Joueur</span>
                 </div>
-                <button onclick="upgradeBasket()" class="bg-blue-600 text-white text-[9px] py-1 px-2 rounded border-b-2 border-blue-800 active:border-b-0 mt-0.5 whitespace-nowrap active:scale-95">
-                    Panier +50 <span class="text-yellow-300 ml-1" id="upCost">50💰</span>
+                <button onclick="upgradeBasket()" class="bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs py-1 px-2 rounded border-b-2 border-blue-800 active:border-b-0 active:translate-y-0.5 whitespace-nowrap transition-all shadow-lg">
+                    Panier +50 <span class="text-yellow-300 ml-1 font-bold" id="upCost">50💰</span>
                 </button>
             </div>
             
-            <div class="flex gap-2 items-center">
-                <div id="basketBox" class="bg-slate-700 w-16 md:w-28 h-10 rounded border-2 border-slate-500 relative overflow-hidden flex items-center justify-center">
+            <div class="flex gap-2 sm:gap-4 items-center">
+                <!-- Panier -->
+                <div id="basketBox" class="bg-slate-700 w-20 sm:w-28 h-12 rounded-lg border-2 border-slate-500 relative overflow-hidden flex flex-col items-center justify-center shadow-inner">
                     <div id="basketBar" class="absolute bottom-0 left-0 w-full bg-blue-500 opacity-50 h-0 transition-all duration-300"></div>
-                    <div class="relative z-10 text-center leading-none">
-                        <div class="text-[8px] text-slate-300 uppercase font-bold">Stock</div>
-                        <div class="text-xs font-bold text-white"><span id="eggsDisp">0</span>/<span id="maxDisp">50</span></div>
-                    </div>
+                    <span class="text-[8px] sm:text-[10px] text-slate-300 uppercase font-bold relative z-10">Stock</span>
+                    <span class="text-xs sm:text-sm font-bold text-white relative z-10 leading-none"><span id="eggsDisp">0</span>/<span id="maxDisp">50</span></span>
                 </div>
 
-                <button onclick="sellEggs()" class="h-10 bg-green-600 text-white font-bold px-3 rounded border-b-4 border-green-800 active:border-b-0 text-xs flex flex-col items-center justify-center active:scale-95">
+                <!-- Action Vendre -->
+                <button onclick="sellEggs()" class="h-12 bg-green-600 hover:bg-green-500 text-white font-bold px-3 sm:px-5 rounded-lg border-b-4 border-green-800 active:border-b-0 active:translate-y-1 text-xs sm:text-sm flex flex-col items-center justify-center shadow-lg transition-all">
                     <span>VENDRE</span>
-                    <span id="valDisp" class="text-[9px] text-green-100 font-mono">Min 30</span>
+                    <span id="valDisp" class="text-[10px] text-green-100 font-mono opacity-80">Min 30</span>
                 </button>
 
-                <div class="h-10 px-2 bg-yellow-900/80 rounded border-2 border-yellow-500 flex items-center justify-center min-w-[60px]">
-                    <span id="coinDisp" class="font-bold text-white text-sm">0</span> <span class="text-xs ml-1">💰</span>
+                <!-- Argent -->
+                <div class="h-12 px-3 bg-yellow-900/80 rounded-lg border-2 border-yellow-500 flex items-center justify-center min-w-[70px] shadow-lg">
+                    <span id="coinDisp" class="font-bold text-white text-sm sm:text-lg">0</span> 
+                    <span class="text-sm ml-1">💰</span>
                 </div>
             </div>
         </div>
 
+        <!-- Zone de Jeu -->
         <div id="warehouse" class="relative flex-grow warehouse-bg overflow-hidden flex flex-col">
-            <a href="https://t.me/+A9ZIQNBWCZM4NzRk" target="_blank" class="absolute top-4 right-4 z-40 bg-telegram text-white p-2 rounded-full shadow-lg border-2 border-white/20 hover:scale-110 transition-transform">
-                <i class="fa-brands fa-telegram text-2xl"></i>
+            <a href="https://t.me/+A9ZIQNBWCZM4NzRk" target="_blank" class="absolute top-3 right-3 z-40 bg-telegram text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg border-2 border-white/20 hover:scale-110 transition-transform active:scale-95">
+                <i class="fa-brands fa-telegram text-xl"></i>
             </a>
 
-            <div class="flex-grow flex items-center justify-center p-4 text-center opacity-50 pointer-events-none">
-                <div id="startHint" class="hidden">
-                    <i class="fa-solid fa-arrow-down text-3xl mb-2"></i>
-                    <p class="text-xs">Faites un dépôt pour commencer !</p>
+            <div class="flex-grow flex items-center justify-center p-4 text-center opacity-40 pointer-events-none select-none">
+                <div id="startHint" class="hidden animate-pulse">
+                    <i class="fa-solid fa-arrow-down text-4xl mb-2 text-yellow-500"></i>
+                    <p class="text-sm font-bold text-yellow-100">Faites un dépôt pour commencer !</p>
                 </div>
             </div>
 
-            <div id="coop" class="coop-area h-[45%] min-h-[150px] w-full relative overflow-hidden shrink-0">
-                <div class="absolute top-2 left-2 bg-black/40 px-2 py-1 rounded text-[10px] text-orange-200 z-20 border border-orange-900/30">
-                    Enclos (<span id="duckCount">0</span>)
+            <!-- Enclos -->
+            <div id="coop" class="coop-area h-[50%] w-full relative overflow-hidden shrink-0 shadow-2xl">
+                <div class="absolute top-2 left-2 bg-black/50 px-3 py-1 rounded-full text-[10px] text-orange-200 z-20 border border-orange-900/30 backdrop-blur-sm flex items-center gap-2">
+                    <i class="fa-solid fa-layer-group"></i> <span id="duckCount">0</span> Canards
                 </div>
             </div>
 
-            <div id="brokenOverlay" class="hidden absolute inset-0 bg-red-900/95 z-[60] flex flex-col items-center justify-center px-4 text-center">
-                <div class="text-5xl mb-2">💥</div>
-                <h2 class="text-2xl font-bold text-white uppercase">PANIER CRAQUÉ !</h2>
-                <p class="text-red-200 text-xs mb-4">Stock perdu (trop d'œufs).<br>Revenez plus souvent !</p>
-                <button onclick="cleanMess()" class="bg-white text-red-900 px-6 py-2 rounded-full font-bold text-sm shadow-lg">NETTOYER</button>
+            <!-- Message Panier Cassé -->
+            <div id="brokenOverlay" class="hidden absolute inset-0 bg-red-900/95 z-[60] flex flex-col items-center justify-center px-6 text-center backdrop-blur-sm animate-fade-in">
+                <div class="text-6xl mb-4 animate-bounce">💥</div>
+                <h2 class="text-3xl font-bold text-white uppercase mb-2">CATASTROPHE !</h2>
+                <p class="text-red-200 text-sm mb-6 max-w-xs mx-auto">Votre panier a débordé pendant votre absence. Tous les œufs sont perdus.</p>
+                <button onclick="cleanMess()" class="bg-white text-red-900 px-8 py-3 rounded-full font-bold text-sm shadow-xl hover:bg-gray-100 transition-transform active:scale-95">NETTOYER</button>
             </div>
         </div>
 
-        <div class="bg-slate-900 p-2 shrink-0 border-t-4 border-slate-700 h-auto pb-20">
-            <div class="flex gap-2 overflow-x-auto hide-scroll pb-safe" id="shopList"></div>
+        <!-- Shop (Horizontal Scroll) -->
+        <div class="bg-slate-900 p-3 shrink-0 border-t-4 border-slate-700 pb-24 z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
+            <div class="flex gap-3 overflow-x-auto hide-scroll pb-2" id="shopList">
+                <!-- Canards générés par JS -->
+            </div>
         </div>
     </div>
 
     <!-- DÉPÔT -->
-    <div id="depositView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-4 px-4">
-        <h2 class="text-center text-xl font-bold text-green-500 mb-1">Recharger</h2>
-        <p class="text-center text-slate-500 text-xs mb-4">500 Pièces pour 5$ (Min)</p>
-        <div class="max-w-md mx-auto w-full space-y-4">
-            <div class="bg-slate-800 p-4 rounded-xl border border-slate-600">
-                <label class="text-xs text-slate-400 font-bold uppercase block mb-1">Montant à déposer ($ USD)</label>
-                <div class="flex items-center gap-2 mb-2">
-                    <span class="text-xl font-bold text-green-500">$</span>
-                    <input type="number" id="depAmountUSD" value="5" min="5" class="w-full bg-slate-900 text-white text-lg font-bold p-2 border-b-2 border-green-500 outline-none" oninput="calcDeposit()">
+    <div id="depositView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-6 px-4">
+        <div class="max-w-md mx-auto w-full space-y-6">
+            <div class="text-center">
+                <h2 class="text-2xl font-bold text-green-500"><i class="fa-solid fa-wallet mr-2"></i>Recharger</h2>
+                <p class="text-slate-500 text-xs">Ajoutez des fonds pour développer votre usine</p>
+            </div>
+            
+            <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg">
+                <label class="text-xs text-slate-400 font-bold uppercase block mb-2">Montant ($ USD)</label>
+                <div class="flex items-center gap-2 mb-4 bg-slate-900 rounded-lg p-2 border border-slate-600 focus-within:border-green-500 transition-colors">
+                    <span class="text-xl font-bold text-green-500 ml-2">$</span>
+                    <input type="number" id="depAmountUSD" value="5" min="5" class="w-full bg-transparent text-white text-xl font-bold outline-none" oninput="calcDeposit()">
                 </div>
-                <div class="flex justify-between text-xs text-slate-400 border-t border-slate-700 pt-2">
-                    <span>Soit environ:</span>
-                    <span class="text-white font-bold"><span id="depEstFCFA">3275</span> FCFA</span>
-                </div>
-                <div class="flex justify-between text-xs text-slate-400 mt-1">
-                    <span>Vous recevrez (1$ = 100 Pièces):</span>
-                    <span class="text-yellow-400 font-bold"><span id="depEstCoins">500</span> Pièces</span>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between text-slate-400">
+                        <span>Conversion :</span>
+                        <span class="text-white font-bold"><span id="depEstFCFA">3275</span> FCFA</span>
+                    </div>
+                    <div class="flex justify-between text-slate-400 pt-2 border-t border-slate-700">
+                        <span>Vous recevrez (1$ = 100P) :</span>
+                        <span class="text-yellow-400 font-bold text-sm"><span id="depEstCoins">500</span> Pièces</span>
+                    </div>
                 </div>
             </div>
-            <div class="grid grid-cols-2 gap-2">
-                <button onclick="setDepMethod('tron')" id="btnDepTron" class="p-3 rounded border border-red-500 bg-red-900/20 text-red-400 text-xs font-bold ring-2 ring-red-500">Crypto (TRX)</button>
-                <button onclick="setDepMethod('mobile')" id="btnDepMob" class="p-3 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold">Mobile Money</button>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="setDepMethod('tron')" id="btnDepTron" class="p-4 rounded-xl border border-red-500 bg-red-900/20 text-red-400 text-xs font-bold ring-2 ring-red-500 transition-all flex flex-col items-center gap-1">
+                    <i class="fa-brands fa-tron text-xl"></i>
+                    Crypto (TRX)
+                </button>
+                <button onclick="setDepMethod('mobile')" id="btnDepMob" class="p-4 rounded-xl border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold transition-all flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-mobile-screen text-xl"></i>
+                    Mobile Money
+                </button>
             </div>
-            <div id="depFormTron" class="space-y-3">
-                <div class="bg-slate-800 p-3 rounded border border-red-500/30">
-                    <p class="text-[10px] text-slate-400 mb-1">Adresse de dépôt (TRC20) :</p>
-                    <div class="flex gap-2 items-center">
-                        <code class="block bg-black/30 p-2 rounded text-[10px] text-slate-300 truncate flex-1 select-all font-mono">TCQq5HjiWVHhiWdnSU3aPY7ewQAoB3rrCf</code>
-                        <button class="bg-slate-700 px-3 py-2 rounded text-xs hover:bg-slate-600" onclick="copyAddr()"><i class="fa-regular fa-copy"></i></button>
+
+            <div id="depFormTron" class="space-y-4 animate-fade-in">
+                <div class="bg-slate-800 p-4 rounded-xl border border-red-500/30">
+                    <p class="text-[10px] text-slate-400 mb-2 uppercase font-bold">Adresse TRC20 unique :</p>
+                    <div class="flex gap-2 items-center bg-black/40 p-2 rounded-lg border border-slate-700">
+                        <code class="text-xs text-slate-300 truncate flex-1 font-mono">TCQq5HjiWVHhiWdnSU3aPY7ewQAoB3rrCf</code>
+                        <button class="text-slate-400 hover:text-white px-2" onclick="copyAddr()"><i class="fa-regular fa-copy"></i></button>
                     </div>
                 </div>
                 <div>
-                    <input type="text" id="depHash" placeholder="Coller le Hash de transaction ici *" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-xs focus:border-green-500 outline-none">
-                    <p class="text-[10px] text-slate-500 mt-1 pl-1"><i class="fa-solid fa-clock"></i> Temps de validation : ~45 secondes</p>
+                    <input type="text" id="depHash" placeholder="Coller le Hash de transaction (TXID)" class="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm focus:border-green-500 outline-none transition-colors">
+                    <p class="text-[10px] text-slate-500 mt-2 pl-2"><i class="fa-solid fa-clock mr-1"></i> Validation automatique : ~45 secondes</p>
                 </div>
             </div>
-            <div id="depFormMobile" class="hidden space-y-3">
-                <div class="bg-slate-800 p-3 rounded border border-airtel">
-                    <p class="text-center font-bold text-airtel mb-1 text-xl" id="mobAmountDisplay">3275 FCFA</p>
-                    <p class="text-[10px] text-slate-400 text-center">Envoyer au <span class="text-white font-bold text-sm">077408087</span></p>
+
+            <div id="depFormMobile" class="hidden space-y-4 animate-fade-in">
+                <div class="bg-slate-800 p-4 rounded-xl border border-airtel">
+                    <div class="text-center">
+                        <p class="text-[10px] text-slate-400 uppercase">Montant à envoyer</p>
+                        <p class="text-2xl font-bold text-airtel mb-2" id="mobAmountDisplay">3275 FCFA</p>
+                        <p class="text-xs text-slate-300 bg-slate-900 py-1 px-3 rounded-full inline-block">Au : <span class="font-bold text-white">077408087</span></p>
+                    </div>
                 </div>
-                <input type="text" id="depMobId" placeholder="ID Transaction (Preuve) *" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-xs focus:border-airtel outline-none">
-                <input type="tel" id="depMobNum" placeholder="Votre Numéro *" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-xs focus:border-airtel outline-none">
-                <p class="text-[10px] text-slate-500 mt-1 pl-1"><i class="fa-solid fa-clock"></i> Temps de validation : ~1 minute</p>
+                <input type="text" id="depMobId" placeholder="ID Transaction (Preuve SMS)" class="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm focus:border-airtel outline-none transition-colors">
+                <input type="tel" id="depMobNum" placeholder="Votre Numéro expéditeur" class="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm focus:border-airtel outline-none transition-colors">
+                <p class="text-[10px] text-slate-500 mt-2 pl-2"><i class="fa-solid fa-clock mr-1"></i> Validation automatique : ~1 minute</p>
             </div>
-            <button onclick="submitDeposit()" id="btnSubmitDep" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-green-800 active:border-b-0 active:translate-y-1">JE CONFIRME LE PAIEMENT</button>
+
+            <button onclick="submitDeposit()" id="btnSubmitDep" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-green-800 active:border-b-0 active:translate-y-1 transition-all uppercase tracking-wide text-sm">
+                Je confirme le paiement
+            </button>
         </div>
     </div>
 
     <!-- RETRAIT -->
-    <div id="withdrawView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-4 px-4">
+    <div id="withdrawView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-6 px-4">
         <h2 class="text-center text-xl font-bold text-red-500 mb-1">Retrait</h2>
-        <p class="text-center text-slate-500 text-xs mb-4">Traitement sous 24h</p>
-        <div class="max-w-md mx-auto w-full space-y-4">
-            <div class="bg-slate-800 p-4 rounded-xl flex justify-between items-center border border-slate-600">
-                <span class="text-xs text-slate-400 font-bold uppercase">Solde Dispo</span>
-                <span class="text-xl font-bold text-yellow-400"><span id="wBal">0</span> 💰</span>
+        <p class="text-center text-slate-500 text-xs mb-6">Récupérez vos gains (24h délai)</p>
+        
+        <div class="max-w-md mx-auto w-full space-y-5">
+            <div class="bg-gradient-to-r from-slate-800 to-slate-700 p-5 rounded-xl border border-slate-600 flex justify-between items-center shadow-md">
+                <div class="flex flex-col">
+                    <span class="text-xs text-slate-400 font-bold uppercase mb-1">Solde Disponible</span>
+                    <span class="text-2xl font-bold text-white"><span id="wBal">0</span> 💰</span>
+                </div>
+                <div class="text-right">
+                    <div class="text-[10px] text-slate-400">Valeur estimée</div>
+                    <div class="text-sm font-bold text-green-400">~ <span id="wBalEst">0</span> FCFA</div>
+                </div>
             </div>
-            <div class="bg-slate-800/50 p-3 rounded text-[10px] text-slate-400 text-center border border-dashed border-slate-600">
-                1000 Pièces = 1500 FCFA | 0.000723 TRX
+
+            <div class="bg-blue-900/20 p-3 rounded-lg text-center border border-blue-500/30">
+                <p class="text-[10px] text-blue-200">Taux : 1000 P = 1500 FCFA | 0.000723 TRX</p>
             </div>
-            <div>
-                <label class="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Montant (Min 1000)</label>
-                <input type="number" id="wAmount" placeholder="Ex: 1000" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white" oninput="calcWithdraw()">
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase ml-2 mb-1 block">Montant (Min 1000)</label>
+                    <input type="number" id="wAmount" placeholder="Ex: 1000" class="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm focus:border-blue-500 outline-none text-white" oninput="calcWithdraw()">
+                </div>
+                
+                <div class="flex justify-between items-center bg-black/30 p-4 rounded-xl border border-slate-700">
+                    <span class="text-xs text-slate-400">Net à recevoir (après frais) :</span>
+                    <span id="wEst" class="font-bold text-green-400 text-lg">0 FCFA</span>
+                </div>
+
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase ml-2 mb-1 block">Méthode</label>
+                    <select id="wMethod" class="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm mb-4 text-white appearance-none" onchange="calcWithdraw()">
+                        <option value="airtel">Airtel Money (13% frais)</option>
+                        <option value="tron">Crypto TRON (1% frais)</option>
+                    </select>
+                    <input type="text" id="wAddr" placeholder="Numéro ou Adresse..." class="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm focus:border-blue-500 outline-none text-white">
+                </div>
+
+                <button onclick="submitWithdraw()" id="wBtn" disabled class="w-full bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-red-800 active:border-b-0 active:translate-y-1 transition-all uppercase tracking-wide text-sm">
+                    Demander le retrait
+                </button>
             </div>
-            <div class="flex justify-between items-center bg-black/20 p-3 rounded border border-slate-700">
-                <span class="text-xs text-slate-400">Net après frais (<span id="wFeeTxt">0%</span>) :</span>
-                <span id="wEst" class="font-bold text-white text-sm">0 FCFA</span>
+            
+            <div class="mt-6">
+                <h3 class="text-xs font-bold text-slate-500 uppercase border-b border-slate-700 pb-2 mb-3">Historique récent</h3>
+                <div id="wHistory" class="space-y-2 text-xs text-slate-500"></div>
             </div>
-            <div>
-                <label class="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Mode de réception</label>
-                <select id="wMethod" class="w-full bg-slate-800 border border-slate-600 rounded p-3 text-xs mb-2 text-white" onchange="calcWithdraw()">
-                    <option value="airtel">Airtel Money (13% frais)</option>
-                    <option value="tron">Crypto TRON (1% frais)</option>
-                </select>
-                <input type="text" id="wAddr" placeholder="Numéro ou Adresse..." class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white">
-            </div>
-            <button onclick="submitWithdraw()" id="wBtn" disabled class="w-full bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-red-800 active:border-b-0 active:translate-y-1">DEMANDER LE RETRAIT</button>
-            <div id="wHistory" class="space-y-2 mt-4 text-xs text-slate-500"></div>
         </div>
     </div>
 
     <!-- ÉQUIPE -->
-    <div id="referralView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-4 px-4">
-        <h2 class="text-center text-xl font-bold text-yellow-400 mb-4">Mon Équipe</h2>
-        <div class="max-w-md mx-auto w-full space-y-4">
-            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                <label class="text-[10px] text-slate-400 uppercase font-bold mb-2 block">Votre lien de parrainage</label>
+    <div id="referralView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-6 px-4">
+        <h2 class="text-center text-xl font-bold text-yellow-400 mb-6">Programme Affiliation</h2>
+        <div class="max-w-md mx-auto w-full space-y-6">
+            
+            <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg">
+                <label class="text-xs text-slate-400 uppercase font-bold mb-3 block">Votre lien unique</label>
                 <div class="flex gap-2">
-                    <input type="text" id="refLink" readonly class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-300 truncate font-mono">
-                    <button onclick="copyRef()" class="bg-blue-600 hover:bg-blue-500 px-3 rounded text-white text-xs"><i class="fa-regular fa-copy"></i></button>
+                    <input type="text" id="refLink" readonly class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs text-slate-300 truncate font-mono select-all">
+                    <button onclick="copyRef()" class="bg-blue-600 hover:bg-blue-500 px-4 rounded-lg text-white transition-colors"><i class="fa-regular fa-copy"></i></button>
                 </div>
-                <p class="text-[10px] text-green-400 mt-2"><i class="fa-solid fa-check"></i> Commissions de 2 à 20 Pièces</p>
+                <div class="mt-4 flex items-center gap-2 text-xs text-green-400 bg-green-900/10 p-2 rounded border border-green-900/30">
+                    <i class="fa-solid fa-money-bill-trend-up"></i>
+                    <span>Commissions : 2 à 20 Pièces par achat</span>
+                </div>
             </div>
-            <div class="bg-gradient-to-r from-yellow-900 to-slate-900 p-4 rounded-xl border border-yellow-500/50 flex justify-between items-center shadow-lg">
+
+            <div class="bg-gradient-to-br from-yellow-900 to-amber-900 p-5 rounded-2xl border border-yellow-500/30 flex justify-between items-center shadow-xl">
                 <div>
-                    <div class="text-[10px] text-yellow-200 uppercase">Commissions en attente</div>
-                    <div class="text-2xl font-bold text-white"><span id="refBal">0</span> 💰</div>
+                    <div class="text-[10px] text-yellow-200 uppercase tracking-wider mb-1">Gains en attente</div>
+                    <div class="text-3xl font-bold text-white"><span id="refBal">0</span> 💰</div>
                 </div>
-                <button onclick="claimRef()" id="btnRefClaim" disabled class="bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-700 disabled:text-slate-500 text-black font-bold py-2 px-4 rounded text-xs shadow-md">RÉCLAMER</button>
+                <button onclick="claimRef()" id="btnRefClaim" disabled class="bg-white hover:bg-gray-100 disabled:bg-white/20 disabled:text-white/50 text-yellow-900 font-bold py-2 px-5 rounded-lg text-xs shadow-lg transition-all active:scale-95">RÉCLAMER</button>
             </div>
+
             <div>
-                <h3 class="text-xs font-bold text-slate-500 uppercase border-b border-slate-700 pb-1 mb-2">Derniers événements</h3>
-                <div id="refLogs" class="space-y-2">
-                    <div class="text-center text-[10px] text-slate-600 italic py-4">En attente d'activité filleul...</div>
+                <h3 class="text-xs font-bold text-slate-500 uppercase border-b border-slate-700 pb-2 mb-3">Activité du réseau</h3>
+                <div id="refLogs" class="space-y-3">
+                    <div class="text-center text-xs text-slate-600 italic py-4 bg-slate-800/50 rounded-lg border border-slate-700/50">En attente d'activité filleul...</div>
                 </div>
             </div>
         </div>
@@ -321,59 +401,57 @@
 
     <!-- ADMIN PANEL -->
     <div id="adminView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto z-[200]">
-        <div class="bg-red-900 p-4 border-b border-red-700 flex justify-between items-center sticky top-0 z-10">
-            <h1 class="text-xl font-bold text-white"><i class="fa-solid fa-shield-halved mr-2"></i>ADMIN PANEL</h1>
-            <button onclick="window.location.reload()" class="bg-red-700 px-3 py-1 rounded text-xs">Déconnexion</button>
+        <div class="bg-red-900 p-4 border-b border-red-700 flex justify-between items-center sticky top-0 z-10 shadow-lg">
+            <h1 class="text-lg font-bold text-white flex items-center gap-2"><i class="fa-solid fa-shield-halved"></i> ADMIN PANEL</h1>
+            <button onclick="window.location.reload()" class="bg-red-800 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors">Déconnexion</button>
         </div>
-        <div class="p-4 space-y-6">
+        <div class="p-4 space-y-6 max-w-2xl mx-auto w-full">
             <div class="grid grid-cols-2 gap-4">
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="text-xs text-slate-400 uppercase">Total Crypto</div>
-                    <div class="text-2xl font-bold text-green-400" id="admTotalCrypto">0 $</div>
+                    <div class="text-[10px] text-slate-400 uppercase font-bold mb-1">Total Crypto</div>
+                    <div class="text-xl sm:text-2xl font-bold text-green-400" id="admTotalCrypto">0 $</div>
                 </div>
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="text-xs text-slate-400 uppercase">Total Mobile</div>
-                    <div class="text-2xl font-bold text-blue-400" id="admTotalMobile">0 FCFA</div>
+                    <div class="text-[10px] text-slate-400 uppercase font-bold mb-1">Total Mobile</div>
+                    <div class="text-xl sm:text-2xl font-bold text-blue-400" id="admTotalMobile">0 FCFA</div>
                 </div>
             </div>
             
-            <!-- Liste des Dépôts -->
             <div>
-                <h3 class="text-white font-bold mb-2 border-b border-slate-700 pb-1">Historique des Dépôts</h3>
+                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700 pb-2">Derniers Dépôts</h3>
                 <div id="admDepositsList" class="space-y-2 text-xs">
-                    <div class="text-slate-500 italic">Chargement...</div>
+                    <div class="text-slate-500 italic p-2 text-center">Chargement...</div>
                 </div>
             </div>
 
-            <!-- Gestion Retraits -->
             <div>
-                <h3 class="text-white font-bold mb-2 border-b border-slate-700 pb-1">Demandes de Retrait</h3>
+                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700 pb-2">Demandes de Retrait</h3>
                 <div id="admWithdrawList" class="space-y-2 text-xs">
-                    <div class="text-slate-500 italic">Chargement...</div>
+                    <div class="text-slate-500 italic p-2 text-center">Chargement...</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- NAV -->
-    <div id="navBar" class="hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-700 h-16 grid grid-cols-4 z-50 shadow-2xl">
-        <button onclick="nav('game')" id="nGame" class="nav-item active flex flex-col items-center justify-center text-slate-500"><i class="fa-solid fa-industry mb-1 text-lg"></i><span class="text-[9px] font-bold">USINE</span></button>
-        <button onclick="nav('deposit')" id="nDep" class="nav-item flex flex-col items-center justify-center text-slate-500"><i class="fa-solid fa-wallet mb-1 text-lg"></i><span class="text-[9px] font-bold">DÉPÔT</span></button>
-        <button onclick="nav('withdraw')" id="nWith" class="nav-item flex flex-col items-center justify-center text-slate-500"><i class="fa-brands fa-tron mb-1 text-lg"></i><span class="text-[9px] font-bold">RETRAIT</span></button>
-        <button onclick="nav('referral')" id="nRef" class="nav-item flex flex-col items-center justify-center text-slate-500 relative"><i class="fa-solid fa-users mb-1 text-lg"></i><span class="text-[9px] font-bold">ÉQUIPE</span><div id="refPing" class="hidden absolute top-3 right-5 w-2 h-2 bg-yellow-400 rounded-full animate-ping"></div></button>
+    <!-- NAV BAR -->
+    <div id="navBar" class="hidden fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-800 h-[70px] grid grid-cols-4 z-50 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] pb-safe">
+        <button onclick="nav('game')" id="nGame" class="nav-item active flex flex-col items-center justify-center text-slate-500 transition-all hover:bg-slate-800/50"><i class="fa-solid fa-industry mb-1 text-xl"></i><span class="text-[9px] font-bold tracking-wide">USINE</span></button>
+        <button onclick="nav('deposit')" id="nDep" class="nav-item flex flex-col items-center justify-center text-slate-500 transition-all hover:bg-slate-800/50"><i class="fa-solid fa-wallet mb-1 text-xl"></i><span class="text-[9px] font-bold tracking-wide">DÉPÔT</span></button>
+        <button onclick="nav('withdraw')" id="nWith" class="nav-item flex flex-col items-center justify-center text-slate-500 transition-all hover:bg-slate-800/50"><i class="fa-brands fa-tron mb-1 text-xl"></i><span class="text-[9px] font-bold tracking-wide">RETRAIT</span></button>
+        <button onclick="nav('referral')" id="nRef" class="nav-item flex flex-col items-center justify-center text-slate-500 transition-all hover:bg-slate-800/50 relative"><i class="fa-solid fa-users mb-1 text-xl"></i><span class="text-[9px] font-bold tracking-wide">ÉQUIPE</span><div id="refPing" class="hidden absolute top-4 right-6 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping border border-slate-900"></div></button>
     </div>
 
     <!-- MODAL -->
-    <div id="modal" class="hidden fixed inset-0 bg-black/90 z-[90] flex items-center justify-center p-4">
-        <div class="bg-slate-800 p-6 rounded-xl border border-slate-600 w-full max-w-xs text-center shadow-2xl">
-            <h3 id="mTitle" class="text-lg font-bold text-white mb-2">Titre</h3>
-            <p id="mMsg" class="text-sm text-slate-300 mb-6">Message</p>
-            <button onclick="document.getElementById('modal').classList.add('hidden')" class="bg-slate-700 hover:bg-slate-600 w-full py-3 rounded text-white font-bold">FERMER</button>
+    <div id="modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[400] flex items-center justify-center p-4">
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-600 w-full max-w-xs text-center shadow-2xl transform transition-all scale-100">
+            <h3 id="mTitle" class="text-xl font-bold text-white mb-2">Message</h3>
+            <p id="mMsg" class="text-sm text-slate-300 mb-6 leading-relaxed">Contenu</p>
+            <button onclick="document.getElementById('modal').classList.add('hidden')" class="bg-slate-700 hover:bg-slate-600 w-full py-3.5 rounded-xl text-white font-bold transition-colors">FERMER</button>
         </div>
     </div>
 
     <script>
-        // CONFIG
+        // CONFIGURATION
         const DUCKS = [
             { id: 1, name: "Poussin", cost: 150, val: 0.5, rate: 30000, emoji: '🐥', comm: 2 },
             { id: 2, name: "Colvert", cost: 600, val: 2.5, rate: 25000, emoji: '🦆', comm: 5 },
@@ -392,13 +470,16 @@
         let isRegistering = false;
         let duckIntervals = [];
 
-        // AUTH
+        // AUTH & INIT
         window.toggleAuth = function(mode) {
             isRegistering = (mode === 'register');
             document.getElementById('authConf').classList.toggle('hidden', !isRegistering);
             document.getElementById('authBtn').textContent = isRegistering ? "S'INSCRIRE" : "SE CONNECTER";
-            document.getElementById('tabLogin').className = !isRegistering ? "flex-1 py-2 text-xs font-bold rounded bg-slate-700 text-white" : "flex-1 py-2 text-xs font-bold rounded text-slate-500";
-            document.getElementById('tabReg').className = isRegistering ? "flex-1 py-2 text-xs font-bold rounded bg-slate-700 text-white" : "flex-1 py-2 text-xs font-bold rounded text-slate-500";
+            // Styles des onglets
+            const activeClass = "bg-slate-700 text-white shadow";
+            const inactiveClass = "text-slate-500 hover:text-white";
+            document.getElementById('tabLogin').className = `flex-1 py-2 text-sm font-bold rounded-md transition-all ${!isRegistering ? activeClass : inactiveClass}`;
+            document.getElementById('tabReg').className = `flex-1 py-2 text-sm font-bold rounded-md transition-all ${isRegistering ? activeClass : inactiveClass}`;
             document.getElementById('authError').classList.add('hidden');
         }
 
@@ -424,7 +505,10 @@
                 return;
             }
 
-            document.getElementById('authBtn').textContent = "Chargement...";
+            const btn = document.getElementById('authBtn');
+            const originalText = btn.textContent;
+            btn.textContent = "Chargement...";
+            btn.disabled = true;
             
             try {
                 if (!window.auth) throw new Error("Firebase non initialisé");
@@ -435,11 +519,13 @@
                 let msg = "Erreur de connexion (" + error.code + ")";
                 if(error.code === 'auth/email-already-in-use') msg = "Cet email est déjà utilisé.";
                 if(error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') msg = "Email ou mot de passe incorrect.";
-                if(error.code === 'auth/user-not-found') msg = "Compte inexistant. Inscrivez-vous.";
+                if(error.code === 'auth/user-not-found') msg = "Compte inexistant.";
+                if(error.code === 'auth/network-request-failed') msg = "Problème réseau. Vérifiez votre connexion.";
                 
                 errDiv.textContent = msg;
                 errDiv.classList.remove('hidden');
-                document.getElementById('authBtn').textContent = isRegistering ? "S'INSCRIRE" : "SE CONNECTER";
+                btn.textContent = originalText;
+                btn.disabled = false;
             }
         }
 
@@ -457,18 +543,11 @@
             initReferralSim();
         }
 
-        window.doLogout = function() {
-            window.signOut(window.auth).then(() => {
-                window.location.reload();
-            });
-        }
-
         function openAdminPanel() {
             document.getElementById('authView').classList.add('hidden');
             document.getElementById('adminView').classList.remove('hidden');
             document.getElementById('adminView').classList.add('flex');
             
-            // Stats
             window.onSnapshot(window.doc(window.db, 'artifacts', window.appId, 'admin', 'stats'), (snap) => {
                 if(snap.exists()) {
                     const d = snap.data();
@@ -477,7 +556,6 @@
                 }
             });
 
-            // Historique Dépôts
             const depQuery = window.query(window.collection(window.db, 'artifacts', window.appId, 'admin_deposits'), window.orderBy('date', 'desc'), window.limit(20));
             window.onSnapshot(depQuery, (snap) => {
                 const div = document.getElementById('admDepositsList');
@@ -485,72 +563,64 @@
                 snap.forEach(doc => {
                     const d = doc.data();
                     div.innerHTML += `
-                        <div class="bg-slate-700 p-2 rounded border border-slate-600 text-xs mb-1">
+                        <div class="bg-slate-700 p-3 rounded-lg border border-slate-600 text-xs mb-2">
                             <div class="flex justify-between font-bold text-white">
                                 <span>${d.amount}</span>
-                                <span>${d.method}</span>
+                                <span class="bg-slate-900 px-2 rounded">${d.method}</span>
                             </div>
-                            <div class="text-slate-400 text-[10px]">${d.user}</div>
-                            <div class="text-slate-500 text-[9px] truncate">${d.ref || '-'}</div>
-                            <div class="text-right text-yellow-500 text-[9px]">${new Date(d.date).toLocaleString()}</div>
+                            <div class="text-slate-400 text-[10px] mt-1">${d.user}</div>
+                            <div class="text-slate-500 text-[9px] truncate font-mono mt-1">${d.ref || '-'}</div>
+                            <div class="text-right text-yellow-500 text-[9px] mt-1">${new Date(d.date).toLocaleString()}</div>
                         </div>
                     `;
                 });
-                if(snap.empty) div.innerHTML = '<div class="text-slate-500">Aucun dépôt récent.</div>';
+                if(snap.empty) div.innerHTML = '<div class="text-slate-500 italic text-center p-4">Aucun dépôt récent.</div>';
             });
 
-            // Gestion Retraits
             const wQuery = window.query(window.collection(window.db, 'artifacts', window.appId, 'withdrawals'), window.orderBy('date', 'desc'));
             window.onSnapshot(wQuery, (snap) => {
                 const div = document.getElementById('admWithdrawList');
                 div.innerHTML = '';
                 snap.forEach(docSnap => {
                     const d = docSnap.data();
-                    if(d.status === 'pending') { // Afficher seulement les pending
-                        const uid = d.uid; // Assurer qu'on a bien l'uid sauvegardé
+                    if(!d.status || d.status === 'pending') { // Retro-compatible check
                         div.innerHTML += `
-                            <div class="bg-slate-800 p-2 rounded border border-yellow-600 text-xs mb-2">
-                                <div class="flex justify-between font-bold text-white mb-1">
-                                    <span>${d.amount} P</span>
-                                    <span class="text-orange-400">${d.method}</span>
+                            <div class="bg-slate-800 p-3 rounded-lg border border-yellow-600/50 text-xs mb-2 shadow-lg">
+                                <div class="flex justify-between font-bold text-white mb-2 pb-1 border-b border-slate-700">
+                                    <span class="text-lg">${d.amount} P</span>
+                                    <span class="text-orange-400 bg-orange-900/20 px-2 rounded">${d.method}</span>
                                 </div>
-                                <div class="text-slate-300 text-[10px] mb-1">User: ${d.email}</div>
-                                <div class="text-slate-400 text-[9px] bg-black/30 p-1 rounded mb-2">${d.address}</div>
+                                <div class="text-slate-300 text-[10px] mb-1"><i class="fa-solid fa-user mr-1"></i> ${d.email || d.user}</div>
+                                <div class="text-white font-mono text-[10px] bg-black/40 p-2 rounded mb-3 break-all select-all">${d.address}</div>
                                 <div class="flex gap-2">
-                                    <button onclick="window.handleAdminWithdraw('${docSnap.id}', 'approve')" class="flex-1 bg-green-600 text-white py-1 rounded hover:bg-green-500">✅ Payer</button>
-                                    <button onclick="window.handleAdminWithdraw('${docSnap.id}', 'reject', '${uid}', ${d.amount})" class="flex-1 bg-red-600 text-white py-1 rounded hover:bg-red-500">❌ Refuser</button>
+                                    <button onclick="window.handleAdminWithdraw('${docSnap.id}', 'approve')" class="flex-1 bg-green-600 text-white py-2 rounded font-bold hover:bg-green-500 shadow transition-colors"><i class="fa-solid fa-check"></i> Payer</button>
+                                    <button onclick="window.handleAdminWithdraw('${docSnap.id}', 'reject', '${d.uid}', ${d.amount})" class="flex-1 bg-red-600 text-white py-2 rounded font-bold hover:bg-red-500 shadow transition-colors"><i class="fa-solid fa-xmark"></i> Refuser</button>
                                 </div>
                             </div>
                         `;
                     }
                 });
-                if(snap.empty) div.innerHTML = '<div class="text-slate-500">Aucune demande en attente.</div>';
+                if(snap.empty) div.innerHTML = '<div class="text-slate-500 italic text-center p-4">Aucune demande en attente.</div>';
             });
         }
 
         window.handleAdminWithdraw = async function(docId, action, uid, amount) {
             try {
                 if (action === 'approve') {
-                    // Juste supprimer la demande (considérée comme payée)
                     await window.deleteDoc(window.doc(window.db, 'artifacts', window.appId, 'withdrawals', docId));
-                    alert("Retrait marqué comme payé.");
+                    // Dans un vrai cas, on marquerait 'paid' au lieu de supprimer
                 } else if (action === 'reject') {
-                    // Rembourser l'utilisateur
                     const userDoc = window.doc(window.db, 'artifacts', window.appId, 'users', uid, 'data');
-                    await window.updateDoc(userDoc, {
-                        coins: window.increment(amount)
-                    });
-                    // Supprimer la demande
+                    await window.updateDoc(userDoc, { coins: window.increment(amount) });
                     await window.deleteDoc(window.doc(window.db, 'artifacts', window.appId, 'withdrawals', docId));
-                    alert("Retrait refusé. Utilisateur remboursé.");
                 }
             } catch (e) {
-                console.error("Erreur admin:", e);
-                alert("Erreur lors de l'action: " + e.message);
+                console.error("Admin action failed", e);
+                alert("Erreur: " + e.message);
             }
         }
 
-        // LOGIC
+        // --- FIRESTORE GAME LOGIC ---
         function loadGame(uid) {
             const userDoc = window.doc(window.db, 'artifacts', window.appId, 'users', uid, 'data');
             window.onSnapshot(userDoc, (docSnap) => {
@@ -605,7 +675,7 @@
         function clearDucks() {
             duckIntervals.forEach(clearInterval);
             duckIntervals = [];
-            document.getElementById('coop').innerHTML = '<div class="absolute top-2 left-2 bg-black/40 px-2 py-1 rounded text-[10px] text-orange-200 z-20 border border-orange-900/30">Enclos (<span id="duckCount">0</span>)</div>';
+            document.getElementById('coop').innerHTML = '<div class="absolute top-2 left-2 bg-black/40 px-2 py-1 rounded-full text-[10px] text-orange-200 z-20 border border-orange-900/30 flex items-center gap-2"><i class="fa-solid fa-layer-group"></i> <span id="duckCount">0</span></div>';
         }
 
         function spawnDuckVisual(conf) {
@@ -703,12 +773,12 @@
             DUCKS.forEach(d => {
                 const can = state.coins >= d.cost;
                 const div = document.createElement('div');
-                div.className = `shrink-0 w-28 bg-slate-800 rounded p-2 border-2 ${can ? 'border-slate-500' : 'border-slate-700 opacity-60'} flex flex-col items-center gap-1`;
+                div.className = `shrink-0 w-28 bg-slate-800 rounded-xl p-3 border-2 ${can ? 'border-slate-500' : 'border-slate-700 opacity-60'} flex flex-col items-center gap-2 transition-transform active:scale-95 shadow-lg`;
                 div.innerHTML = `
-                    <div class="flex justify-between w-full text-xs text-slate-400"><span>${d.name}</span></div>
-                    <div class="text-2xl">${d.emoji}</div>
-                    <div class="text-xs text-center text-slate-500">${(d.rate/1000).toFixed(1)}s</div>
-                    <button onclick="buyDuck(${d.id})" ${can?'':'disabled'} class="w-full text-xs font-bold py-1 rounded ${can?'bg-green-600 text-white':'bg-slate-700 text-slate-500'}">${d.cost}💰</button>
+                    <div class="flex justify-between w-full text-xs text-slate-400 font-bold"><span>${d.name}</span></div>
+                    <div class="text-4xl filter drop-shadow-md my-1">${d.emoji}</div>
+                    <div class="text-xs text-center text-slate-500 bg-slate-900 rounded px-2 py-0.5">${(d.rate/1000).toFixed(1)}s</div>
+                    <button onclick="buyDuck(${d.id})" ${can?'':'disabled'} class="w-full text-xs font-bold py-2 rounded-lg ${can?'bg-green-600 text-white shadow-md':'bg-slate-700 text-slate-500'}">${d.cost}💰</button>
                 `;
                 cont.appendChild(div);
             });
@@ -717,8 +787,8 @@
         let depMethod = 'tron';
         window.setDepMethod = function(m) {
             depMethod = m;
-            document.getElementById('btnDepTron').className = m==='tron' ? "p-3 rounded border border-red-500 bg-red-900/20 text-red-400 text-xs font-bold ring-2 ring-red-500" : "p-3 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold";
-            document.getElementById('btnDepMob').className = m==='mobile' ? "p-3 rounded border border-airtel bg-red-900/10 text-airtel text-xs font-bold ring-2 ring-airtel" : "p-3 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold";
+            document.getElementById('btnDepTron').className = m==='tron' ? "p-4 rounded-xl border border-red-500 bg-red-900/20 text-red-400 text-xs font-bold ring-2 ring-red-500 transition-all flex flex-col items-center gap-1" : "p-4 rounded-xl border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold transition-all flex flex-col items-center gap-1 opacity-50";
+            document.getElementById('btnDepMob').className = m==='mobile' ? "p-4 rounded-xl border border-airtel bg-red-900/10 text-airtel text-xs font-bold ring-2 ring-airtel transition-all flex flex-col items-center gap-1" : "p-4 rounded-xl border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold transition-all flex flex-col items-center gap-1 opacity-50";
             document.getElementById('depFormTron').classList.toggle('hidden', m!=='tron');
             document.getElementById('depFormMobile').classList.toggle('hidden', m!=='mobile');
         }
@@ -746,7 +816,7 @@
 
             const btn = document.getElementById('btnSubmitDep');
             const originalText = "JE CONFIRME LE PAIEMENT";
-            let waitTime = depMethod === 'tron' ? 45 : 60; // 45s Crypto, 60s Mobile
+            let waitTime = depMethod === 'tron' ? 45 : 60; 
             
             btn.disabled = true;
             btn.className = "w-full bg-slate-700 text-slate-400 font-bold py-4 rounded-xl cursor-not-allowed";
@@ -761,7 +831,6 @@
                     state.coins += coinsToAdd;
                     saveGame();
                     
-                    // Stats Admin + Historique
                     const statsDoc = window.doc(window.db, 'artifacts', window.appId, 'admin', 'stats');
                     const depAmt = depMethod === 'tron' ? usd + ' $' : fcfa + ' FCFA';
                     const depRef = document.getElementById(depMethod === 'tron' ? 'depHash' : 'depMobId').value;
@@ -769,7 +838,6 @@
                     if(depMethod === 'tron') window.setDoc(statsDoc, { cryptoDep: window.increment(usd) }, { merge: true });
                     else window.setDoc(statsDoc, { mobileDep: window.increment(fcfa) }, { merge: true });
 
-                    // Add History Doc
                     window.addDoc(window.collection(window.db, 'artifacts', window.appId, 'admin_deposits'), {
                         user: window.currentUserEmail,
                         amount: depAmt,
@@ -821,7 +889,7 @@
             updateUI();
             
             window.addDoc(window.collection(window.db, 'artifacts', window.appId, 'withdrawals'), {
-                uid: window.currentUserId, // Add this for refund
+                uid: window.currentUserId,
                 email: window.currentUserEmail,
                 amount: amt,
                 method: method,
