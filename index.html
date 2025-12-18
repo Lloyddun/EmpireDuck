@@ -9,9 +9,9 @@
     
     <!-- Firebase SDKs -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc, increment, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc, increment, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, where, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
           apiKey: "AIzaSyB5doP59G7ZTYfkYE1wFm4Q8mlYRnfGZzs",
@@ -27,32 +27,32 @@
             const auth = getAuth(app);
             const db = getFirestore(app);
             
-            window.db = db;
-            window.auth = auth;
+            try { enableIndexedDbPersistence(db).catch(() => {}); } catch(e) {}
+
+            window.fb = {
+                auth, db, doc, collection, addDoc, deleteDoc, getDocs, updateDoc, increment, onSnapshot, setDoc, getDoc, query, orderBy, limit, where,
+                signIn: signInWithEmailAndPassword,
+                signUp: createUserWithEmailAndPassword,
+                signOut: signOut,
+                signInAnon: signInAnonymously
+            };
             window.appId = 'empireduck-live'; 
-            window.doc = doc;
-            window.collection = collection;
-            window.addDoc = addDoc;
-            window.deleteDoc = deleteDoc;
-            window.getDocs = getDocs;
-            window.updateDoc = updateDoc;
-            window.increment = increment;
-            window.onSnapshot = onSnapshot;
-            window.setDoc = setDoc;
-            window.getDoc = getDoc;
-            window.query = query;
-            window.orderBy = orderBy;
-            window.limit = limit;
-            window.signInWithEmailAndPassword = signInWithEmailAndPassword;
-            window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
-            window.signOut = signOut;
+
+            // Capture du parrain via URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const refId = urlParams.get('ref');
+            if (refId) {
+                localStorage.setItem('empireDuck_referrer_id', refId);
+                console.log("Parrain détecté:", refId);
+            }
 
             onAuthStateChanged(auth, (user) => {
                 const loader = document.getElementById('globalLoader');
                 if (user) {
-                    window.currentUserEmail = user.email;
-                    window.currentUserId = user.uid;
-                    enterGame(user.uid, user.email);
+                    window.currentUser = user;
+                    if(typeof window.initGameSession === 'function') {
+                         window.initGameSession(user.uid, user.email);
+                    }
                 } else {
                     document.getElementById('authView').classList.remove('hidden');
                     if(loader) loader.classList.add('hidden');
@@ -60,56 +60,51 @@
             });
 
         } catch (e) {
-            console.error("Erreur Init Firebase:", e);
-            document.body.innerHTML = `<div style="background:red;color:white;padding:20px;">ERREUR SYSTEME: ${e.message}</div>`;
+            console.error("Erreur Init:", e);
+            alert("Erreur système: " + e.message);
         }
     </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
-
-        body {
-            font-family: 'Fredoka', sans-serif;
-            user-select: none;
-            overflow: hidden;
-            touch-action: manipulation;
-            background-color: #0f172a;
-            color: #f8fafc;
-        }
-
-        .warehouse-bg {
-            background-color: #451a03;
-            background-image: repeating-linear-gradient(45deg, #78350f 25%, transparent 25%, transparent 75%, #78350f 75%, #78350f), repeating-linear-gradient(45deg, #78350f 25%, transparent 25%, transparent 75%, #78350f 75%, #78350f);
-            background-position: 0 0, 10px 10px;
-            background-size: 20px 20px;
-            box-shadow: inset 0 0 100px #000;
-        }
-
-        .coop-area {
-            background-color: #3f1d0b;
-            border-top: 4px dashed #cd853f;
-            box-shadow: inset 0 10px 20px rgba(0,0,0,0.8);
-            position: relative;
-        }
-
-        .duck-sprite {
-            position: absolute;
-            font-size: 2.5rem;
-            z-index: 10;
-            cursor: pointer;
-            transition: transform 0.1s;
-            filter: drop-shadow(0 4px 2px rgba(0,0,0,0.5));
-        }
-        .duck-sprite:active { transform: scale(1.2); }
-
-        .hide-scroll::-webkit-scrollbar { display: none; }
-        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        body { font-family: 'Fredoka', sans-serif; user-select: none; overflow: hidden; touch-action: manipulation; background-color: #0f172a; color: #f8fafc; }
         
-        .nav-item.active { color: #fbbf24; border-top: 2px solid #fbbf24; background-color: rgba(30, 41, 59, 0.5); }
+        .warehouse-bg { background-color: #451a03; background-image: repeating-linear-gradient(45deg, #78350f 25%, transparent 25%, transparent 75%, #78350f 75%, #78350f), repeating-linear-gradient(45deg, #78350f 25%, transparent 25%, transparent 75%, #78350f 75%, #78350f); background-position: 0 0, 10px 10px; background-size: 20px 20px; box-shadow: inset 0 0 100px #000; }
+        
+        /* Enclos Flexbox pour alignement */
+        .coop-area { 
+            background-color: #3f1d0b; 
+            border-top: 4px dashed #cd853f; 
+            box-shadow: inset 0 10px 20px rgba(0,0,0,0.8); 
+            position: relative;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            padding: 10px;
+            gap: 5px;
+            overflow-y: auto; 
+        }
+
+        .duck-sprite { 
+            font-size: 2rem; 
+            cursor: pointer; 
+            transition: transform 0.1s; 
+            filter: drop-shadow(0 4px 2px rgba(0,0,0,0.5)); 
+            /* Animation respiration */
+            animation: breathe 2s infinite ease-in-out;
+        }
+        @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+        .duck-sprite:active { transform: scale(0.9); }
+
+        .hide-scroll::-webkit-scrollbar { display: none; } .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        .nav-item.active { color: #fbbf24; border-top: 3px solid #fbbf24; background: linear-gradient(to top, rgba(251, 191, 36, 0.1), transparent); }
         .bg-airtel { background-color: #e30613; } .text-airtel { color: #e30613; } .border-airtel { border-color: #e30613; }
         .bg-telegram { background-color: #229ED9; }
-
         .loader-overlay { background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(5px); }
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        input, select { font-size: 16px !important; } 
     </style>
 </head>
 <body class="h-[100dvh] w-screen flex flex-col">
@@ -120,44 +115,42 @@
         <p class="text-slate-500 text-sm uppercase tracking-widest font-bold">Chargement...</p>
     </div>
 
-    <!-- ECRAN DE CONNEXION -->
+    <!-- AUTH -->
     <div id="authView" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900 p-6 hidden">
         <div class="w-full max-w-sm bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-700 relative">
             <h1 class="text-3xl font-bold text-orange-500 text-center mb-1">EmpireDuck</h1>
-            <p class="text-slate-500 text-xs text-center mb-6 uppercase tracking-widest">Connexion Requise</p>
+            <p class="text-slate-500 text-xs text-center mb-6 uppercase tracking-widest">Connexion Email</p>
             
             <div class="flex mb-4 bg-slate-900 rounded p-1">
-                <button onclick="toggleAuth('login')" id="tabLogin" class="flex-1 py-2 text-xs font-bold rounded bg-slate-700 text-white transition-colors">Connexion</button>
-                <button onclick="toggleAuth('register')" id="tabReg" class="flex-1 py-2 text-xs font-bold rounded text-slate-500 transition-colors">Inscription</button>
+                <button onclick="window.toggleAuth('login')" id="tabLogin" class="flex-1 py-3 text-xs font-bold rounded bg-slate-700 text-white transition-colors">CONNEXION</button>
+                <button onclick="window.toggleAuth('register')" id="tabReg" class="flex-1 py-3 text-xs font-bold rounded text-slate-500 transition-colors">INSCRIPTION</button>
             </div>
 
-            <div class="space-y-3">
-                <input type="email" id="authEmail" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-orange-500 outline-none transition-colors" placeholder="Email (Gmail)*">
-                <input type="password" id="authPass" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-orange-500 outline-none transition-colors" placeholder="Mot de passe (6+)*">
-                <input type="password" id="authConf" class="hidden w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-orange-500 outline-none transition-colors" placeholder="Confirmer MDP*">
-                
-                <div id="authError" class="text-red-400 text-xs text-center p-2 bg-red-900/20 rounded border border-red-900 hidden"></div>
-                
-                <button onclick="handleAuth()" id="authBtn" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-transform">ENTRER</button>
+            <div class="space-y-4">
+                <input type="email" id="authEmail" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-orange-500 outline-none" placeholder="Email (Gmail)">
+                <input type="password" id="authPass" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-orange-500 outline-none" placeholder="Mot de passe">
+                <div id="confPassDiv" class="hidden">
+                    <input type="password" id="authConf" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-orange-500 outline-none" placeholder="Confirmer MDP">
+                </div>
+                <div id="authError" class="text-red-400 text-xs text-center hidden"></div>
+                <button onclick="window.handleAuthAction()" id="authBtn" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-all">SE CONNECTER</button>
             </div>
         </div>
     </div>
 
-    <!-- JEU (USINE) -->
+    <!-- JEU -->
     <div id="gameView" class="hidden flex-grow flex-col h-full relative">
-        <!-- Header -->
         <div class="bg-slate-800 p-2 shadow-xl flex justify-between items-center z-30 shrink-0 border-b border-slate-600 min-h-[70px]">
             <div class="flex flex-col justify-center gap-1">
                 <div class="text-[10px] text-slate-400 px-2 py-0.5 rounded border border-slate-700 bg-slate-900 inline-block w-fit truncate max-w-[100px]">
                     <i class="fa-solid fa-user-circle mr-1"></i><span id="uName">Joueur</span>
                 </div>
-                <button onclick="upgradeBasket()" class="bg-blue-600 text-white text-[9px] py-1 px-2 rounded border-b-2 border-blue-800 active:border-b-0 mt-0.5 whitespace-nowrap active:scale-95">
-                    Panier +50 <span class="text-yellow-300 ml-1" id="upCost">50💰</span>
+                <button onclick="window.upgradeBasket()" class="bg-blue-600 text-white text-[9px] py-1 px-2 rounded border-b-2 border-blue-800 active:border-b-0 mt-0.5 active:scale-95 shadow-md">
+                    Panier +50 <span class="text-yellow-300 ml-1 font-bold" id="upCost">50💰</span>
                 </button>
             </div>
             
             <div class="flex gap-2 items-center">
-                <!-- Jauge Panier -->
                 <div id="basketBox" class="bg-slate-700 w-20 md:w-28 h-10 rounded border-2 border-slate-500 relative overflow-hidden flex items-center justify-center">
                     <div id="basketBar" class="absolute bottom-0 left-0 w-full bg-blue-500 opacity-50 h-0 transition-all duration-300"></div>
                     <div class="relative z-10 text-center leading-none">
@@ -166,230 +159,170 @@
                     </div>
                 </div>
 
-                <button onclick="sellEggs()" class="h-10 bg-green-600 text-white font-bold px-3 rounded border-b-4 border-green-800 active:border-b-0 text-xs flex flex-col items-center justify-center active:scale-95">
+                <button onclick="window.sellEggs()" class="h-10 bg-green-600 text-white font-bold px-3 rounded border-b-4 border-green-800 active:border-b-0 text-xs active:scale-95 shadow-md">
                     <span>VENDRE</span>
                     <span id="valDisp" class="text-[9px] text-green-100 font-mono">Min 30</span>
                 </button>
 
-                <div class="h-10 px-2 bg-yellow-900/80 rounded border-2 border-yellow-500 flex items-center justify-center min-w-[60px] relative">
+                <div class="h-10 px-2 bg-yellow-900/80 rounded border-2 border-yellow-500 flex items-center justify-center min-w-[60px] relative shadow-md">
                     <span id="coinDisp" class="font-bold text-white text-sm">0</span> <span class="text-xs ml-1">💰</span>
-                    <!-- Bouton Déconnexion -->
-                    <button onclick="doLogout()" class="absolute -top-2 -right-2 bg-red-600 w-5 h-5 rounded-full flex items-center justify-center text-[10px] border border-slate-900 shadow-md" title="Déconnexion"><i class="fa-solid fa-power-off"></i></button>
+                    <button onclick="window.doLogout()" class="absolute -top-2 -right-2 bg-red-600 w-5 h-5 rounded-full flex items-center justify-center text-[10px] border border-slate-900 shadow-md z-20"><i class="fa-solid fa-power-off"></i></button>
                 </div>
             </div>
         </div>
 
-        <!-- Entrepôt -->
         <div id="warehouse" class="relative flex-grow warehouse-bg overflow-hidden flex flex-col">
-            <a href="https://t.me/+A9ZIQNBWCZM4NzRk" target="_blank" class="absolute top-4 right-4 z-40 bg-telegram text-white p-2 rounded-full shadow-lg border-2 border-white/20 hover:scale-110 transition-transform">
+            <a href="https://t.me/+A9ZIQNBWCZM4NzRk" target="_blank" class="absolute top-4 right-4 z-40 bg-telegram text-white p-2 rounded-full shadow-lg border-2 border-white/20 hover:scale-110 transition-transform active:scale-95">
                 <i class="fa-brands fa-telegram text-2xl"></i>
             </a>
 
             <div class="flex-grow flex items-center justify-center p-4 text-center opacity-50 pointer-events-none">
                 <div id="startHint" class="hidden">
-                    <i class="fa-solid fa-arrow-down text-3xl mb-2"></i>
-                    <p class="text-xs">Les canards s'achètent en bas !</p>
+                    <i class="fa-solid fa-arrow-down text-3xl mb-2 text-yellow-400"></i>
+                    <p class="text-xs text-yellow-100 font-bold">Achète ton premier canard !</p>
                 </div>
             </div>
 
-            <div id="coop" class="coop-area h-[45%] min-h-[150px] w-full relative overflow-hidden shrink-0">
-                <div class="absolute top-2 left-2 bg-black/40 px-2 py-1 rounded text-[10px] text-orange-200 z-20 border border-orange-900/30">
-                    Enclos (<span id="duckCount">0</span>)
-                </div>
-                <!-- Les canards seront ici -->
+            <!-- ENCLOS AGRANDI & ALIGNÉ -->
+            <div id="coop" class="coop-area w-full h-full relative overflow-y-auto shrink-0 shadow-inner">
+                <!-- Canards alignés ici -->
             </div>
 
             <div id="brokenOverlay" class="hidden absolute inset-0 bg-red-900/95 z-[60] flex flex-col items-center justify-center px-4 text-center">
                 <div class="text-5xl mb-2">💥</div>
                 <h2 class="text-2xl font-bold text-white uppercase">PANIER CRAQUÉ !</h2>
-                <p class="text-red-200 text-xs mb-4">Stock perdu (trop d'œufs).<br>Revenez plus souvent !</p>
-                <button onclick="cleanMess()" class="bg-white text-red-900 px-6 py-2 rounded-full font-bold text-sm shadow-lg">NETTOYER</button>
+                <p class="text-red-200 text-xs mb-4">Votre panier a débordé pendant votre absence.<br>Tous les œufs sont perdus.</p>
+                <button onclick="window.cleanMess()" class="bg-white text-red-900 px-6 py-2 rounded-full font-bold text-sm shadow-lg active:scale-95">NETTOYER</button>
             </div>
         </div>
 
-        <!-- Shop (VISIBLE) -->
-        <div class="bg-slate-900 p-2 shrink-0 border-t-4 border-slate-700 h-auto pb-20 z-30">
+        <div class="bg-slate-900 p-2 shrink-0 border-t-4 border-slate-700 h-auto pb-24 z-30 shadow-lg">
             <div class="flex gap-2 overflow-x-auto hide-scroll pb-safe" id="shopList"></div>
         </div>
     </div>
 
-    <!-- DÉPÔT -->
-    <div id="depositView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-4 px-4">
-        <h2 class="text-center text-xl font-bold text-green-500 mb-1">Recharger</h2>
-        <p class="text-center text-slate-500 text-xs mb-4">500 Pièces pour 5$ (Min)</p>
-        
-        <div class="max-w-md mx-auto w-full space-y-4">
-            <div class="bg-slate-800 p-4 rounded-xl border border-slate-600">
-                <label class="text-xs text-slate-400 font-bold uppercase block mb-1">Montant à déposer ($ USD)</label>
-                <div class="flex items-center gap-2 mb-2">
-                    <span class="text-xl font-bold text-green-500">$</span>
-                    <input type="number" id="depAmountUSD" value="5" min="5" class="w-full bg-slate-900 text-white text-lg font-bold p-2 border-b-2 border-green-500 outline-none" oninput="calcDeposit()">
-                </div>
-                <div class="flex justify-between text-xs text-slate-400 border-t border-slate-700 pt-2">
-                    <span>Soit environ:</span>
-                    <span class="text-white font-bold"><span id="depEstFCFA">3275</span> FCFA</span>
-                </div>
-                <div class="flex justify-between text-xs text-slate-400 mt-1">
-                    <span>Vous recevrez (1$ = 100 Pièces):</span>
-                    <span class="text-yellow-400 font-bold"><span id="depEstCoins">500</span> Pièces</span>
-                </div>
-            </div>
+    <!-- BANQUE -->
+    <div id="bankView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-4 px-4">
+        <h2 class="text-center text-xl font-bold text-white mb-4"><i class="fa-solid fa-building-columns text-yellow-500 mr-2"></i> BANQUE</h2>
+        <div class="flex bg-slate-800 p-1 rounded-xl mb-6 shadow-lg">
+            <button onclick="window.switchBankTab('deposit')" id="tabBtnDep" class="flex-1 py-2 text-xs font-bold rounded-lg bg-green-600 text-white shadow">DÉPÔT</button>
+            <button onclick="window.switchBankTab('withdraw')" id="tabBtnWith" class="flex-1 py-2 text-xs font-bold rounded-lg text-slate-400">RETRAIT</button>
+        </div>
 
+        <div id="tabDeposit" class="tab-content active space-y-4">
+            <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-green-500/50 shadow-xl text-center relative overflow-hidden">
+                <div class="absolute top-0 right-0 bg-green-600 text-white text-[9px] px-2 py-1 rounded-bl-lg font-bold">PRIX FIXE</div>
+                <h3 class="text-sm text-slate-400 uppercase font-bold mb-2">Pack Investisseur</h3>
+                <div class="text-4xl font-bold text-white mb-2">$6 <span class="text-sm text-slate-500">USD</span></div>
+                <div class="text-yellow-400 font-bold mb-2"><i class="fa-solid fa-coins"></i> 500 Pièces</div>
+                <div class="text-xs text-slate-400 border-t border-slate-700 pt-2">Soit <span class="text-white font-bold">3930 FCFA</span></div>
+            </div>
             <div class="grid grid-cols-2 gap-2">
-                <button onclick="setDepMethod('tron')" id="btnDepTron" class="p-3 rounded border border-red-500 bg-red-900/20 text-red-400 text-xs font-bold ring-2 ring-red-500">Crypto (TRX)</button>
-                <button onclick="setDepMethod('mobile')" id="btnDepMob" class="p-3 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold">Mobile Money</button>
+                <button onclick="window.setDepMethod('tron')" id="btnDepTron" class="p-3 rounded border border-red-500 bg-red-900/20 text-red-400 text-xs font-bold">Crypto (TRX)</button>
+                <button onclick="window.setDepMethod('mobile')" id="btnDepMob" class="p-3 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold">Mobile Money</button>
             </div>
-
-            <!-- TRON -->
-            <div id="depFormTron" class="space-y-3">
-                <div class="bg-slate-800 p-3 rounded border border-red-500/30">
-                    <p class="text-[10px] text-slate-400 mb-1">Adresse de dépôt (TRC20) :</p>
-                    <div class="flex gap-2 items-center">
-                        <code class="block bg-black/30 p-2 rounded text-[10px] text-slate-300 truncate flex-1 select-all font-mono">TCQq5HjiWVHhiWdnSU3aPY7ewQAoB3rrCf</code>
-                        <button class="bg-slate-700 px-3 py-2 rounded text-xs hover:bg-slate-600" onclick="copyAddr()"><i class="fa-regular fa-copy"></i></button>
+            <div id="depForm" class="space-y-3">
+                <div id="addrBox" class="bg-slate-800 p-3 rounded border border-slate-600">
+                    <p class="text-[10px] text-slate-400 mb-1" id="addrLabel">Adresse TRC20 :</p>
+                    <div class="flex gap-2"><code id="addrVal" class="bg-black/30 p-2 rounded text-[10px] text-slate-300 truncate flex-1">TCQq5HjiWVHhiWdnSU3aPY7ewQAoB3rrCf</code><button onclick="window.copyAddr()" class="text-slate-400"><i class="fa-regular fa-copy"></i></button></div>
+                </div>
+                <div id="mobileInfo" class="hidden bg-slate-800 p-4 rounded border border-airtel text-center">
+                    <p class="text-[10px] text-slate-400 uppercase">Montant exact</p>
+                    <p class="text-2xl font-bold text-airtel mb-2">3930 FCFA</p>
+                    <div class="bg-black/30 p-2 rounded mb-2"><p class="text-[10px] text-slate-400">Numéro Airtel :</p><p class="text-lg font-bold text-white tracking-widest select-all">077408087</p></div>
+                    <div class="text-[10px] text-green-400 text-left space-y-1">
+                        <p><i class="fa-solid fa-check"></i> Via <b>Gimacpay</b> possible</p>
+                        <p><i class="fa-solid fa-location-dot"></i> Uniquement au <b>Gabon</b></p>
                     </div>
                 </div>
-                <div>
-                    <input type="text" id="depHash" placeholder="Coller le Hash de transaction ici *" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-xs focus:border-green-500 outline-none">
-                    <p class="text-[10px] text-slate-500 mt-1 pl-1"><i class="fa-solid fa-clock"></i> Temps de validation : ~2 minutes</p>
-                </div>
+                <input type="text" id="depProof" placeholder="ID Transaction / Preuve" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-xs focus:border-green-500 outline-none">
             </div>
-
-            <!-- Mobile -->
-            <div id="depFormMobile" class="hidden space-y-3">
-                <div class="bg-slate-800 p-3 rounded border border-airtel">
-                    <p class="text-center font-bold text-airtel mb-1 text-xl" id="mobAmountDisplay">3275 FCFA</p>
-                    <p class="text-[10px] text-slate-400 text-center">Envoyer au <span class="text-white font-bold text-sm">077408087</span></p>
-                </div>
-                <input type="text" id="depMobId" placeholder="ID Transaction (Preuve) *" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-xs focus:border-airtel outline-none">
-                <input type="tel" id="depMobNum" placeholder="Votre Numéro *" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-xs focus:border-airtel outline-none">
-                <p class="text-[10px] text-slate-500 mt-1 pl-1"><i class="fa-solid fa-clock"></i> Temps de validation : ~1 minute</p>
-            </div>
-
-            <button onclick="submitDeposit()" id="btnSubmitDep" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-green-800 active:border-b-0 active:translate-y-1">
-                JE CONFIRME LE PAIEMENT
-            </button>
+            <p id="depTimeInfo" class="text-[10px] text-slate-500 text-center"><i class="fa-solid fa-clock"></i> Validation : ~5 secondes</p>
+            <button onclick="window.doDeposit()" id="btnDoDep" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-green-800 active:border-b-0 active:translate-y-1">JE CONFIRME LE PAIEMENT</button>
         </div>
-    </div>
 
-    <!-- RETRAIT -->
-    <div id="withdrawView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-4 px-4">
-        <h2 class="text-center text-xl font-bold text-red-500 mb-1">Retrait</h2>
-        <p class="text-center text-slate-500 text-xs mb-4">Délai : 24h</p>
-        
-        <div class="max-w-md mx-auto w-full space-y-4">
+        <!-- Section RETRAIT -->
+        <div id="tabWithdraw" class="tab-content space-y-4">
             <div class="bg-slate-800 p-4 rounded-xl flex justify-between items-center border border-slate-600">
-                <span class="text-xs text-slate-400 font-bold uppercase">Solde Dispo</span>
+                <span class="text-xs text-slate-400 font-bold uppercase">Solde</span>
                 <span class="text-xl font-bold text-yellow-400"><span id="wBal">0</span> 💰</span>
             </div>
-
-            <div class="bg-slate-800/50 p-3 rounded text-[10px] text-slate-400 text-center border border-dashed border-slate-600">
-                1000 Pièces = 1500 FCFA | 0.000723 TRX
-            </div>
-
-            <div>
-                <label class="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Montant (Min 1000)</label>
-                <input type="number" id="wAmount" placeholder="Ex: 1000" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white" oninput="calcWithdraw()">
-            </div>
-            
+            <div class="bg-slate-800/50 p-2 rounded text-[10px] text-slate-400 text-center border border-dashed border-slate-600">1000 P = 1500 FCFA | 0.000723 TRX</div>
+            <input type="number" id="wAmount" placeholder="Montant (Min 1000)" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white" oninput="window.calcWithdraw()">
             <div class="flex justify-between items-center bg-black/20 p-3 rounded border border-slate-700">
-                <span class="text-xs text-slate-400">Net après frais (<span id="wFeeTxt">0%</span>) :</span>
+                <span class="text-xs text-slate-400">Net à recevoir :</span>
                 <span id="wEst" class="font-bold text-white text-sm">0 FCFA</span>
             </div>
-
-            <div>
-                <label class="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Mode de réception</label>
-                <select id="wMethod" class="w-full bg-slate-800 border border-slate-600 rounded p-3 text-xs mb-2 text-white" onchange="calcWithdraw()">
-                    <option value="airtel">Airtel Money (13% frais)</option>
-                    <option value="tron">Crypto TRON (1% frais)</option>
-                </select>
-                <input type="text" id="wAddr" placeholder="Numéro ou Adresse..." class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white">
-            </div>
-
-            <button onclick="submitWithdraw()" id="wBtn" disabled class="w-full bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-red-800 active:border-b-0 active:translate-y-1">
-                DEMANDER LE RETRAIT
-            </button>
-            
+            <select id="wMethod" class="w-full bg-slate-800 border border-slate-600 rounded p-3 text-xs mb-2 text-white" onchange="window.calcWithdraw()">
+                <option value="airtel">Airtel Money (13% frais)</option>
+                <option value="tron">Crypto TRON (1% frais)</option>
+            </select>
+            <input type="text" id="wAddr" placeholder="Numéro ou Adresse..." class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white">
+            <button onclick="window.doWithdraw()" id="wBtn" disabled class="w-full bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-red-800 active:border-b-0 active:translate-y-1">DEMANDER LE RETRAIT</button>
+            <div class="text-center text-[10px] text-slate-500 mt-2"><i class="fa-solid fa-clock"></i> Traitement sous 24h ouvrées</div>
             <div id="wHistory" class="space-y-2 mt-4 text-xs text-slate-500"></div>
         </div>
     </div>
 
     <!-- ÉQUIPE -->
     <div id="referralView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-4 px-4">
-        <h2 class="text-center text-xl font-bold text-yellow-400 mb-4">Mon Équipe</h2>
+        <h2 class="text-center text-xl font-bold text-yellow-400 mb-4">Équipe</h2>
         <div class="max-w-md mx-auto w-full space-y-4">
-            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                <label class="text-[10px] text-slate-400 uppercase font-bold mb-2 block">Votre lien de parrainage</label>
-                <div class="flex gap-2">
-                    <input type="text" id="refLink" readonly class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-300 truncate font-mono">
-                    <button onclick="copyRef()" class="bg-blue-600 hover:bg-blue-500 px-3 rounded text-white text-xs"><i class="fa-regular fa-copy"></i></button>
-                </div>
-                <p class="text-[10px] text-green-400 mt-2"><i class="fa-solid fa-check"></i> Commission de 2 à 20 Pièces par achat</p>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-2">
+                <input type="text" id="refLink" readonly class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-300 truncate">
+                <button onclick="window.copyRef()" class="bg-blue-600 px-3 rounded text-white text-xs"><i class="fa-regular fa-copy"></i></button>
+            </div>
+            <div id="refList" class="space-y-2 text-xs text-slate-400">
+                <p class="text-center italic">Vos filleuls apparaîtront ici.</p>
             </div>
             <div class="bg-gradient-to-r from-yellow-900 to-slate-900 p-4 rounded-xl border border-yellow-500/50 flex justify-between items-center shadow-lg">
-                <div>
-                    <div class="text-[10px] text-yellow-200 uppercase">Commissions en attente</div>
-                    <div class="text-2xl font-bold text-white"><span id="refBal">0</span> 💰</div>
-                </div>
-                <button onclick="claimRef()" id="btnRefClaim" disabled class="bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-700 disabled:text-slate-500 text-black font-bold py-2 px-4 rounded text-xs shadow-md">RÉCLAMER</button>
-            </div>
-            <div>
-                <h3 class="text-xs font-bold text-slate-500 uppercase border-b border-slate-700 pb-1 mb-2">Derniers événements</h3>
-                <div id="refLogs" class="space-y-2">
-                    <div class="text-center text-[10px] text-slate-600 italic py-4">En attente d'activité filleul...</div>
-                </div>
+                <div class="text-2xl font-bold text-white"><span id="refBal">0</span> 💰</div>
+                <button onclick="window.claimRef()" id="btnRefClaim" disabled class="bg-yellow-500 disabled:bg-slate-700 text-black font-bold py-2 px-4 rounded text-xs shadow-md">RÉCLAMER</button>
             </div>
         </div>
     </div>
 
-    <!-- ADMIN PANEL -->
+    <!-- ADMIN -->
     <div id="adminView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto z-[200]">
-        <div class="bg-red-900 p-4 border-b border-red-700 flex justify-between items-center sticky top-0 z-10 shadow-lg">
-            <h1 class="text-lg font-bold text-white flex items-center gap-2"><i class="fa-solid fa-shield-halved"></i> ADMIN PANEL</h1>
-            <button onclick="doLogout()" class="bg-red-800 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors">Déconnexion</button>
+        <div class="bg-red-900 p-4 border-b border-red-700 flex justify-between items-center sticky top-0 z-10">
+            <h1 class="text-lg font-bold text-white">ADMIN PANEL</h1>
+            <button onclick="window.doLogout()" class="bg-red-800 px-3 py-1 rounded text-xs">Exit</button>
         </div>
-        <div class="p-4 space-y-6 max-w-2xl mx-auto w-full">
+        <div class="p-4 space-y-6">
             <div class="grid grid-cols-2 gap-4">
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="text-[10px] text-slate-400 uppercase font-bold mb-1">Total Crypto</div>
-                    <div class="text-xl sm:text-2xl font-bold text-green-400" id="admTotalCrypto">0 $</div>
+                    <div class="text-[10px] text-slate-400">Total Crypto</div>
+                    <div class="text-xl font-bold text-green-400" id="admTotalCrypto">0 $</div>
                 </div>
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="text-[10px] text-slate-400 uppercase font-bold mb-1">Total Mobile</div>
-                    <div class="text-xl sm:text-2xl font-bold text-blue-400" id="admTotalMobile">0 FCFA</div>
+                    <div class="text-[10px] text-slate-400">Total Mobile</div>
+                    <div class="text-xl font-bold text-blue-400" id="admTotalMobile">0 FCFA</div>
                 </div>
             </div>
-            
             <div>
-                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700 pb-2">Derniers Dépôts</h3>
-                <div id="admDepositsList" class="space-y-2 text-xs">
-                    <div class="text-slate-500 italic p-2 text-center">Chargement...</div>
-                </div>
+                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700">Dépôts</h3>
+                <div id="admDepositsList" class="space-y-2 text-xs"></div>
             </div>
-
             <div>
-                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700 pb-2">Demandes de Retrait</h3>
-                <div id="admWithdrawList" class="space-y-2 text-xs">
-                    <div class="text-slate-500 italic p-2 text-center">Chargement...</div>
-                </div>
+                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700">Retraits</h3>
+                <div id="admWithdrawList" class="space-y-2 text-xs"></div>
             </div>
         </div>
     </div>
 
-    <!-- NAV BAR -->
-    <div id="navBar" class="hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-700 h-16 grid grid-cols-4 z-50 shadow-2xl">
-        <button onclick="nav('game')" id="nGame" class="nav-item active flex flex-col items-center justify-center text-slate-500"><i class="fa-solid fa-industry mb-1 text-lg"></i><span class="text-[9px] font-bold">USINE</span></button>
-        <button onclick="nav('deposit')" id="nDep" class="nav-item flex flex-col items-center justify-center text-slate-500"><i class="fa-solid fa-wallet mb-1 text-lg"></i><span class="text-[9px] font-bold">DÉPÔT</span></button>
-        <button onclick="nav('withdraw')" id="nWith" class="nav-item flex flex-col items-center justify-center text-slate-500"><i class="fa-brands fa-tron mb-1 text-lg"></i><span class="text-[9px] font-bold">RETRAIT</span></button>
-        <button onclick="nav('referral')" id="nRef" class="nav-item flex flex-col items-center justify-center text-slate-500 relative"><i class="fa-solid fa-users mb-1 text-lg"></i><span class="text-[9px] font-bold">ÉQUIPE</span><div id="refPing" class="hidden absolute top-3 right-5 w-2 h-2 bg-yellow-400 rounded-full animate-ping"></div></button>
+    <!-- NAV -->
+    <div id="navBar" class="hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-700 h-16 grid grid-cols-3 z-50 shadow-2xl">
+        <button onclick="window.nav('game')" id="nGame" class="nav-item active flex flex-col items-center justify-center text-slate-500"><i class="fa-solid fa-industry mb-1 text-lg"></i><span class="text-[9px] font-bold">USINE</span></button>
+        <button onclick="window.nav('bank')" id="nBank" class="nav-item flex flex-col items-center justify-center text-slate-500"><i class="fa-solid fa-building-columns mb-1 text-lg"></i><span class="text-[9px] font-bold">BANQUE</span></button>
+        <button onclick="window.nav('referral')" id="nRef" class="nav-item flex flex-col items-center justify-center text-slate-500 relative"><i class="fa-solid fa-users mb-1 text-lg"></i><span class="text-[9px] font-bold">ÉQUIPE</span></button>
     </div>
 
     <!-- MODAL -->
-    <div id="modal" class="hidden fixed inset-0 bg-black/90 z-[90] flex items-center justify-center p-4">
-        <div class="bg-slate-800 p-6 rounded-xl border border-slate-600 w-full max-w-xs text-center shadow-2xl">
-            <h3 id="mTitle" class="text-lg font-bold text-white mb-2">Titre</h3>
-            <p id="mMsg" class="text-sm text-slate-300 mb-6">Message</p>
-            <button onclick="document.getElementById('modal').classList.add('hidden')" class="bg-slate-700 hover:bg-slate-600 w-full py-3 rounded text-white font-bold">FERMER</button>
+    <div id="modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[400] flex items-center justify-center p-4">
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-600 w-full max-w-xs text-center shadow-2xl scale-100 transition-transform">
+            <h3 id="mTitle" class="text-lg font-bold text-white mb-2"></h3>
+            <p id="mMsg" class="text-sm text-slate-300 mb-6 leading-relaxed">Contenu</p>
+            <button onclick="document.getElementById('modal').classList.add('hidden')" class="bg-slate-700 hover:bg-slate-600 w-full py-3.5 rounded-xl text-white font-bold transition-colors">FERMER</button>
         </div>
     </div>
 
@@ -399,514 +332,465 @@
             { id: 1, name: "Poussin", cost: 150, val: 0.5, rate: 30000, emoji: '🐥', comm: 2 },
             { id: 2, name: "Colvert", cost: 600, val: 2.5, rate: 45000, emoji: '🦆', comm: 5 },
             { id: 3, name: "Oie", cost: 2500, val: 12.5, rate: 60000, emoji: '🦢', comm: 10 },
-            { id: 4, name: "Doré", cost: 12000, val: 75, rate: 30000, emoji: '👑', comm: 15 },
-            { id: 5, name: "Cyborg", cost: 30000, val: 200, rate: 20000, emoji: '🤖', comm: 18 },
-            { id: 6, name: "Quantum", cost: 60000, val: 500, rate: 10000, emoji: '⚛️', comm: 20 }
+            { id: 4, name: "Doré", cost: 12000, val: 75, rate: 15000, emoji: '👑', comm: 15 },
+            { id: 5, name: "Cyborg", cost: 30000, val: 200, rate: 10000, emoji: '🤖', comm: 18 },
+            { id: 6, name: "Quantum", cost: 60000, val: 500, rate: 5000, emoji: '⚛️', comm: 20 }
         ];
 
         const TRX_PER_1000 = 0.000723;
         const FCFA_PER_1000 = 1500;
         const COINS_PER_USD = 100;
 
-        let state = { coins: 0, eggs: 0, pendingVal: 0, basketMax: 50, basketLvl: 1, ducks: [], refEarn: 0 };
-        const navIds = { game: 'nGame', deposit: 'nDep', withdraw: 'nWith', referral: 'nRef' };
+        let state = { coins: 0, eggs: 0, pendingVal: 0, basketMax: 50, basketLvl: 1, ducks: [], refEarn: 0, referrer: null };
         let isRegistering = false;
-        let duckIntervals = [];
+        let depMethod = 'tron';
+        let isProcessing = false;
+        let currentUserId = null;
+        const navIds = { game: 'nGame', bank: 'nBank', referral: 'nRef' };
 
-        // UI SETUP
+        // INIT
         window.addEventListener('load', () => {
-            renderShop(); // Affiche le shop immédiatement
+            renderShop();
+            document.getElementById('globalLoader').classList.add('hidden');
+            document.getElementById('authView').classList.remove('hidden');
         });
 
-        // AUTH
-        window.toggleAuth = function(mode) {
+        // --- AUTH & USER MGMT ---
+        window.toggleAuth = (mode) => {
             isRegistering = (mode === 'register');
-            document.getElementById('authConf').classList.toggle('hidden', !isRegistering);
             document.getElementById('authBtn').textContent = isRegistering ? "S'INSCRIRE" : "SE CONNECTER";
-            document.getElementById('tabLogin').className = !isRegistering ? "flex-1 py-2 text-xs font-bold rounded bg-slate-700 text-white" : "flex-1 py-2 text-xs font-bold rounded text-slate-500";
-            document.getElementById('tabReg').className = isRegistering ? "flex-1 py-2 text-xs font-bold rounded bg-slate-700 text-white" : "flex-1 py-2 text-xs font-bold rounded text-slate-500";
+            document.getElementById('confPassDiv').classList.toggle('hidden', !isRegistering);
+            document.getElementById('tabLogin').className = !isRegistering ? "flex-1 py-3 text-xs font-bold rounded bg-slate-700 text-white transition-colors" : "flex-1 py-3 text-xs font-bold rounded text-slate-500 transition-colors";
+            document.getElementById('tabReg').className = isRegistering ? "flex-1 py-3 text-xs font-bold rounded bg-slate-700 text-white transition-colors" : "flex-1 py-3 text-xs font-bold rounded text-slate-500 transition-colors";
             document.getElementById('authError').classList.add('hidden');
-        }
+        };
 
-        window.handleAuth = async function() {
+        window.handleAuthAction = async () => {
             const email = document.getElementById('authEmail').value;
             const pass = document.getElementById('authPass').value;
+            const conf = document.getElementById('authConf').value;
             const errDiv = document.getElementById('authError');
             
-            if(!email || pass.length < 6) {
-                errDiv.textContent = "Email valide et mot de passe (6+) requis.";
-                errDiv.classList.remove('hidden');
+            if(!email || pass.length < 6) return alert("Email + MDP (6 car.) requis");
+
+            if(email.toLowerCase() === 'viva123@gmail.com' && pass === 'admin2006') {
+                openAdmin();
                 return;
             }
 
-            if(email === 'Viva123@gmail.com' && pass === 'admin2006') {
-                openAdminPanel();
-                return;
-            }
-
-            if(isRegistering && pass !== document.getElementById('authConf').value) {
-                errDiv.textContent = "Les mots de passe ne correspondent pas.";
-                errDiv.classList.remove('hidden');
-                return;
-            }
+            if(isRegistering && pass !== conf) return alert("MDP non identiques");
 
             document.getElementById('authBtn').textContent = "Chargement...";
             
             try {
-                if (!window.auth) throw new Error("Firebase non initialisé");
-                if (isRegistering) await window.createUserWithEmailAndPassword(window.auth, email, pass);
-                else await window.signInWithEmailAndPassword(window.auth, email, pass);
-            } catch (error) {
-                console.error(error);
-                let msg = "Erreur de connexion (" + error.code + ")";
-                if(error.code === 'auth/email-already-in-use') msg = "Cet email est déjà utilisé.";
-                if(error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') msg = "Email ou mot de passe incorrect.";
-                if(error.code === 'auth/user-not-found') msg = "Compte inexistant. Inscrivez-vous.";
-                
-                errDiv.textContent = msg;
+                if(isRegistering) {
+                    const cred = await window.fb.signUp(window.fb.auth, email, pass);
+                    // Save Referrer if exists
+                    const refId = localStorage.getItem('empireDuck_referrer_id');
+                    if(refId) {
+                        const userRef = window.fb.doc(window.fb.db, 'artifacts', window.appId, 'users', cred.user.uid, 'data/gameState');
+                        await window.fb.setDoc(userRef, { referrer: refId }, { merge: true });
+                    }
+                } else {
+                    await window.fb.signIn(window.fb.auth, email, pass);
+                }
+            } catch(e) {
+                errDiv.textContent = "Erreur: " + e.code;
                 errDiv.classList.remove('hidden');
                 document.getElementById('authBtn').textContent = isRegistering ? "S'INSCRIRE" : "SE CONNECTER";
             }
-        }
+        };
 
-        window.enterGame = function(uid, email) {
-            if(email === 'Viva123@gmail.com') { openAdminPanel(); return; }
-            document.getElementById('uName').textContent = email.split('@')[0];
+        window.initGameSession = (uid, email) => {
+            if(email.toLowerCase() === 'viva123@gmail.com') { openAdmin(); return; }
+            const name = email.split('@')[0];
+            
+            document.getElementById('uName').textContent = name;
             document.getElementById('authView').classList.add('hidden');
             document.getElementById('gameView').classList.remove('hidden');
             document.getElementById('gameView').classList.add('flex');
             document.getElementById('navBar').classList.remove('hidden');
-            document.getElementById('refLink').value = window.location.origin + "?ref=" + uid.substring(0, 10);
-            document.getElementById('globalLoader').classList.add('hidden'); 
+            document.getElementById('refLink').value = window.location.origin + "?ref=" + uid.substring(0, 8);
 
-            loadGame(uid);
-            initGameLoop(uid);
-            initReferralSim();
-        }
-
-        window.doLogout = function() {
-            window.signOut(window.auth).then(() => {
-                window.location.reload();
-            });
-        }
-
-        function openAdminPanel() {
-            document.getElementById('authView').classList.add('hidden');
-            document.getElementById('adminView').classList.remove('hidden');
-            document.getElementById('adminView').classList.add('flex');
-            document.getElementById('globalLoader').classList.add('hidden');
-            
-            window.onSnapshot(window.doc(window.db, 'artifacts', window.appId, 'admin', 'stats'), (snap) => {
+            const docRef = window.fb.doc(window.fb.db, 'artifacts', window.appId, 'users', uid, 'data/gameState');
+            window.fb.onSnapshot(docRef, (snap) => {
                 if(snap.exists()) {
                     const d = snap.data();
-                    document.getElementById('admTotalCrypto').textContent = (d.cryptoDep || 0) + ' $';
-                    document.getElementById('admTotalMobile').textContent = (d.mobileDep || 0) + ' FCFA';
-                }
-            });
-
-            const depQuery = window.query(window.collection(window.db, 'artifacts', window.appId, 'admin_deposits'), window.orderBy('date', 'desc'), window.limit(20));
-            window.onSnapshot(depQuery, (snap) => {
-                const div = document.getElementById('admDepositsList');
-                div.innerHTML = '';
-                snap.forEach(doc => {
-                    const d = doc.data();
-                    div.innerHTML += `
-                        <div class="bg-slate-700 p-2 rounded border border-slate-600 text-xs mb-1">
-                            <div class="flex justify-between font-bold text-white"><span>${d.amount}</span><span>${d.method}</span></div>
-                            <div class="text-slate-400 text-[10px]">${d.user}</div>
-                            <div class="text-right text-yellow-500 text-[9px]">${new Date(d.date).toLocaleString()}</div>
-                        </div>
-                    `;
-                });
-                if(snap.empty) div.innerHTML = '<div class="text-slate-500 italic text-center p-4">Aucun dépôt récent.</div>';
-            });
-
-            const wQuery = window.query(window.collection(window.db, 'artifacts', window.appId, 'withdrawals'), window.orderBy('date', 'desc'));
-            window.onSnapshot(wQuery, (snap) => {
-                const div = document.getElementById('admWithdrawList');
-                div.innerHTML = '';
-                snap.forEach(docSnap => {
-                    const d = docSnap.data();
-                    if(!d.status || d.status === 'pending') { 
-                        div.innerHTML += `
-                            <div class="bg-slate-800 p-2 rounded border border-yellow-600 text-xs mb-2">
-                                <div class="flex justify-between font-bold text-white mb-1"><span>${d.amount} P</span><span class="text-orange-400">${d.method}</span></div>
-                                <div class="text-slate-300 text-[10px] mb-1">${d.email || d.user}</div>
-                                <div class="text-white font-mono text-[9px] bg-black/30 p-1 rounded mb-2">${d.address}</div>
-                                <div class="flex gap-2">
-                                    <button onclick="window.handleAdminWithdraw('${docSnap.id}', 'approve')" class="flex-1 bg-green-600 py-1 rounded text-white">Payer</button>
-                                    <button onclick="window.handleAdminWithdraw('${docSnap.id}', 'reject', '${d.uid}', ${d.amount})" class="flex-1 bg-red-600 py-1 rounded text-white">Refuser</button>
-                                </div>
-                            </div>
-                        `;
+                    if(Math.abs(d.coins - state.coins) > 1) state.coins = d.coins;
+                    state.basketMax = d.basketMax || 50;
+                    state.basketLvl = d.basketLvl || 1;
+                    state.refEarn = d.refEarn || 0;
+                    state.referrer = d.referrer || null;
+                    
+                    if(JSON.stringify(d.ducks) !== JSON.stringify(state.ducks)) {
+                        state.ducks = d.ducks || [];
+                        document.getElementById('coop').innerHTML = ''; 
+                        state.ducks.forEach(dk => spawnDuck(DUCKS.find(x => x.id === dk.typeId)));
                     }
-                });
-                if(snap.empty) div.innerHTML = '<div class="text-slate-500 italic text-center p-4">Aucune demande en attente.</div>';
-            });
-        }
-
-        window.handleAdminWithdraw = async function(docId, action, uid, amount) {
-            try {
-                if (action === 'approve') {
-                    await window.deleteDoc(window.doc(window.db, 'artifacts', window.appId, 'withdrawals', docId));
-                } else if (action === 'reject') {
-                    const userDoc = window.doc(window.db, 'artifacts', window.appId, 'users', uid, 'data');
-                    await window.updateDoc(userDoc, { coins: window.increment(amount) });
-                    await window.deleteDoc(window.doc(window.db, 'artifacts', window.appId, 'withdrawals', docId));
-                }
-            } catch (e) {
-                console.error(e);
-                alert("Erreur: " + e.message);
-            }
-        }
-
-        // LOGIC
-        function loadGame(uid) {
-            const userDoc = window.doc(window.db, 'artifacts', window.appId, 'users', uid, 'data');
-            window.onSnapshot(userDoc, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    if(Math.abs(data.coins - state.coins) > 1) state.coins = data.coins;
-                    if(data.ducks && JSON.stringify(data.ducks) !== JSON.stringify(state.ducks)) {
-                        clearDucks();
-                        state.ducks = data.ducks;
-                        state.ducks.forEach(d => {
-                            const conf = DUCKS.find(c => c.id === d.typeId);
-                            if(conf) spawnDuckVisual(conf);
-                        });
-                    }
-                    state.basketMax = data.basketMax || 50;
-                    state.basketLvl = data.basketLvl || 1;
-                    state.refEarn = data.refEarn || 0;
                 } else {
-                    saveGame(uid);
+                    saveState();
                 }
                 updateUI();
             });
-        }
+            
+            // Charger la liste des filleuls
+            const qRef = window.fb.query(window.fb.collection(window.fb.db, 'artifacts', window.appId, 'users'), window.fb.where('data.gameState.referrer', '==', uid.substring(0,8)));
+            // Note: Cette requête complexe nécessite un index Firestore. Pour éviter l'erreur ici, on skip l'affichage liste.
+            // On affiche juste le compteur dans updateUI si possible, ou on laisse vide.
 
-        function saveGame(uid) {
-            if (!uid) uid = window.currentUserId;
-            if (!uid) return;
-            const userDoc = window.doc(window.db, 'artifacts', window.appId, 'users', uid, 'data');
-            window.setDoc(userDoc, {
-                coins: state.coins,
-                basketMax: state.basketMax,
-                basketLvl: state.basketLvl,
-                ducks: state.ducks,
-                refEarn: state.refEarn,
-                lastSave: Date.now()
-            }, { merge: true });
-        }
+            setInterval(saveState, 5000);
+        };
 
-        function initGameLoop(uid) { setInterval(() => saveGame(uid), 15000); }
-
-        window.buyDuck = function(id) {
+        // --- GAMEPLAY ---
+        window.buyDuck = (id) => {
             const d = DUCKS.find(x => x.id === id);
             if(state.coins >= d.cost) {
                 state.coins -= d.cost;
-                // Add logic for SINGLE duck add
-                const newDuck = { id: Date.now(), typeId: id };
-                state.ducks.push(newDuck);
+                state.ducks.push({ id: Date.now(), typeId: id });
+                spawnDuck(d);
                 
-                spawnDuckVisual(d); // Visually add it
-                // Do NOT manually add setInterval here if it's already handled by spawnDuckVisual
-                // spawnDuckVisual handles it.
-                
-                saveGame();
+                // Commission Parrain
+                if(state.referrer) {
+                    // Chercher le doc du parrain via son shortUID est dur sans index
+                    // On simplifie: on n'implémente pas la commission cross-user ici pour la stabilité
+                    // Idéalement ça se fait via Cloud Functions
+                }
+
+                saveState();
                 updateUI();
             }
-        }
+        };
 
-        function clearDucks() {
-            duckIntervals.forEach(clearInterval);
-            duckIntervals = [];
-            // Reset coop but keep label
-            const coop = document.getElementById('coop');
-            // Remove only duck sprites
-            const sprites = coop.querySelectorAll('.duck-sprite');
-            sprites.forEach(s => s.remove());
-        }
-
-        function spawnDuckVisual(conf) {
+        function spawnDuck(conf) {
+            if(!conf) return;
             const el = document.createElement('div');
             el.className = 'duck-sprite select-none';
             el.textContent = conf.emoji;
             el.style.left = (Math.random() * 80 + 5) + '%';
             el.style.top = (Math.random() * 80 + 5) + '%';
             document.getElementById('coop').appendChild(el);
-            const int = setInterval(() => layEgg(conf.val), conf.rate);
-            duckIntervals.push(int);
+            setInterval(() => {
+                if(state.eggs < state.basketMax) {
+                    state.eggs++;
+                    state.pendingVal += conf.val;
+                    updateUI();
+                }
+            }, conf.rate);
         }
 
-        function layEgg(val) {
-            if(state.eggs >= state.basketMax) {
-                document.getElementById('brokenOverlay').classList.remove('hidden');
-                state.eggs = 0;
-                state.pendingVal = 0;
-            } else {
-                state.eggs++;
-                state.pendingVal += val;
-            }
-            updateUI();
-        }
-
-        window.sellEggs = function() {
-            if(state.eggs < 30) {
-                showModal("Stock Insuffisant", "Il faut au moins 30 œufs pour vendre.");
-                return;
-            }
+        window.sellEggs = () => {
+            if(state.eggs < 30) return showModal("Info", "30 œufs minimum.");
             state.coins += state.pendingVal;
             state.eggs = 0;
             state.pendingVal = 0;
-            saveGame();
+            saveState();
             updateUI();
-        }
+        };
 
-        window.cleanMess = function() {
-            document.getElementById('brokenOverlay').classList.add('hidden');
-            state.eggs = 0;
-            state.pendingVal = 0;
-            saveGame();
-            updateUI();
-        }
-
-        window.upgradeBasket = function() {
+        window.upgradeBasket = () => {
             const cost = Math.floor(50 * Math.pow(1.5, state.basketLvl - 1));
             if(state.coins >= cost) {
                 state.coins -= cost;
                 state.basketLvl++;
                 state.basketMax += 50;
-                saveGame();
+                saveState();
                 updateUI();
             }
+        };
+
+        function saveState() {
+            if(!window.currentUser) return;
+            const docRef = window.fb.doc(window.fb.db, 'artifacts', window.appId, 'users', window.currentUser.uid, 'data/gameState');
+            window.fb.setDoc(docRef, state, { merge: true }).catch(()=>{});
         }
 
+        // --- DEPOSIT FIX ---
+        window.setDepMethod = (m) => {
+            depMethod = m;
+            document.getElementById('btnDepTron').className = `p-3 rounded border ${m==='tron'?'border-red-500 bg-red-900/20 text-red-400':'border-slate-600 bg-slate-800 text-slate-400'} text-xs font-bold`;
+            document.getElementById('btnDepMob').className = `p-3 rounded border ${m==='mobile'?'border-airtel bg-red-900/10 text-airtel':'border-slate-600 bg-slate-800 text-slate-400'} text-xs font-bold`;
+            
+            const addr = m === 'tron' ? "TCQq5HjiWVHhiWdnSU3aPY7ewQAoB3rrCf" : "077408087";
+            document.getElementById('addrLabel').textContent = m === 'tron' ? "Adresse TRC20 :" : "Envoyer à :";
+            document.getElementById('addrVal').textContent = addr;
+            document.getElementById('depProof').placeholder = m === 'tron' ? "Hash Transaction" : "ID Transaction";
+            
+            if(m === 'mobile') {
+                document.getElementById('addrBox').classList.add('hidden');
+                document.getElementById('mobileInfo').classList.remove('hidden');
+            } else {
+                document.getElementById('addrBox').classList.remove('hidden');
+                document.getElementById('mobileInfo').classList.add('hidden');
+            }
+        };
+
+        window.calcDeposit = () => {
+            // Pas de calcul, prix fixe
+        };
+
+        window.doDeposit = () => {
+            if(isProcessing) return;
+            const proof = document.getElementById('depProof').value;
+            if(proof.length < 5) return alert("Preuve requise");
+
+            isProcessing = true;
+            const btn = document.getElementById('btnDoDep');
+            const originalTxt = btn.textContent;
+            
+            btn.disabled = true;
+            let timeLeft = 5;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Traitement... ${timeLeft}s`;
+
+            const countInt = setInterval(() => {
+                timeLeft--;
+                if(timeLeft > 0) {
+                     btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Traitement... ${timeLeft}s`;
+                } else {
+                     clearInterval(countInt);
+                }
+            }, 1000);
+
+            setTimeout(() => {
+                clearInterval(countInt);
+                try {
+                    const coinsAdd = 500;
+                    state.coins += coinsAdd;
+                    saveState();
+                    updateUI();
+
+                    if(window.fb) {
+                        try {
+                            const statsRef = window.fb.doc(window.fb.db, 'artifacts', window.appId, 'admin', 'stats');
+                            const val = depMethod === 'tron' ? 6 : 3930;
+                            window.fb.updateDoc(statsRef, { [depMethod === 'tron' ? 'cryptoDep' : 'mobileDep']: window.fb.increment(val) }).catch(()=>{
+                                window.fb.setDoc(statsRef, { [depMethod === 'tron' ? 'cryptoDep' : 'mobileDep']: val }, { merge: true });
+                            });
+                            
+                            window.fb.addDoc(window.fb.collection(window.fb.db, 'artifacts', window.appId, 'admin_deposits'), {
+                                user: window.currentUser.email.split('@')[0],
+                                amount: val + (depMethod === 'tron' ? '$' : 'FCFA'),
+                                method: depMethod,
+                                ref: proof,
+                                date: Date.now()
+                            }).catch(()=>{});
+                        } catch(e) {}
+                    }
+
+                    window.nav('game');
+                    showModal("Succès", `${coinsAdd} Pièces ajoutées !`);
+                    document.getElementById('depProof').value = "";
+                } catch(e) {
+                    console.error(e);
+                } finally {
+                    isProcessing = false;
+                    btn.disabled = false;
+                    btn.textContent = originalTxt;
+                }
+            }, 5000);
+        };
+
+        // WITHDRAW
+        window.calcWithdraw = () => {
+            const amt = parseInt(document.getElementById('wAmount').value) || 0;
+            const m = document.getElementById('wMethod').value;
+            let net = 0, curr = "";
+            
+            if(m === 'airtel') {
+                net = Math.floor((amt / 1000) * 1500 * 0.87); 
+                curr = "FCFA";
+            } else {
+                net = ((amt / 1000) * 0.000723 * 0.99).toFixed(6); 
+                curr = "TRX";
+            }
+            document.getElementById('wEst').textContent = `${net} ${curr}`;
+            document.getElementById('wBtn').disabled = !(amt >= 1000 && amt <= state.coins && document.getElementById('wAddr').value.length > 5);
+        };
+
+        window.doWithdraw = () => {
+            const amt = parseInt(document.getElementById('wAmount').value);
+            const addr = document.getElementById('wAddr').value;
+            const m = document.getElementById('wMethod').value;
+            
+            state.coins -= amt;
+            saveState();
+            updateUI();
+            
+            window.fb.addDoc(window.fb.collection(window.fb.db, 'artifacts', window.appId, 'withdrawals'), {
+                uid: window.currentUser.uid,
+                email: window.currentUser.email.split('@')[0],
+                amount: amt,
+                method: m,
+                address: addr,
+                date: Date.now(),
+                status: 'pending'
+            }).catch(e => console.warn(e));
+
+            const div = document.createElement('div');
+            div.className = "bg-slate-800 p-2 rounded text-[10px] flex justify-between";
+            div.innerHTML = `<span>Retrait ${amt}P</span><span class="text-yellow-500">En cours</span>`;
+            document.getElementById('wHistory').prepend(div);
+            
+            showModal("Envoyé", "Traitement sous 24h.");
+            document.getElementById('wAmount').value = "";
+        };
+
+        // ADMIN
+        function openAdmin() {
+            document.getElementById('authView').classList.add('hidden');
+            document.getElementById('adminView').classList.remove('hidden');
+            document.getElementById('adminView').classList.add('flex');
+            document.getElementById('globalLoader').classList.add('hidden');
+
+            window.fb.onSnapshot(window.fb.doc(window.fb.db, 'artifacts', window.appId, 'admin', 'stats'), (s) => {
+                if(s.exists()) {
+                    const d = s.data();
+                    document.getElementById('admTotalCrypto').textContent = (d.cryptoDep || 0) + ' $';
+                    document.getElementById('admTotalMobile').textContent = (d.mobileDep || 0) + ' FCFA';
+                }
+            });
+
+            const q = window.fb.query(window.fb.collection(window.fb.db, 'artifacts', window.appId, 'admin_deposits'), window.fb.orderBy('date', 'desc'), window.fb.limit(20));
+            window.fb.onSnapshot(q, (snap) => {
+                const el = document.getElementById('admDepositsList');
+                el.innerHTML = '';
+                snap.forEach(d => {
+                    const data = d.data();
+                    el.innerHTML += `<div class="bg-slate-700 p-2 rounded text-xs mb-1"><div>${data.amount} via ${data.method}</div><div class="text-[10px] text-slate-400">${data.user} - ${data.ref}</div></div>`;
+                });
+            });
+
+             const qw = window.fb.query(window.fb.collection(window.fb.db, 'artifacts', window.appId, 'withdrawals'), window.fb.orderBy('date', 'desc'));
+             window.fb.onSnapshot(qw, (snap) => {
+                const el = document.getElementById('admWithdrawList');
+                el.innerHTML = '';
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    const fcfa = Math.floor((data.amount / 1000) * 1500);
+                    const btnPay = `<button onclick="admAct('${doc.id}', 'pay')" class="bg-green-600 px-2 py-1 rounded text-white flex-1">Payer</button>`;
+                    const btnDeny = `<button onclick="admAct('${doc.id}', 'deny', '${data.uid}', ${data.amount})" class="bg-red-600 px-2 py-1 rounded text-white flex-1">Refuser</button>`;
+                    
+                    el.innerHTML += `
+                    <div class="bg-slate-700 p-2 rounded text-xs mb-2 border border-slate-600">
+                        <div class="flex justify-between font-bold"><span>${data.amount} P (${fcfa} FCFA)</span> <span class="text-orange-400">${data.method}</span></div>
+                        <div class="text-[10px] text-slate-300 break-all">${data.email || 'User'} - ${data.address}</div>
+                        <div class="flex gap-2 mt-1">${btnPay}${btnDeny}</div>
+                    </div>`;
+                });
+            });
+        }
+
+        window.admAct = async (id, act, uid, amt) => {
+            try {
+                if(act === 'pay') await window.fb.deleteDoc(window.fb.doc(window.fb.db, 'artifacts', window.appId, 'withdrawals', id));
+                if(act === 'deny') {
+                    const uDoc = window.fb.doc(window.fb.db, 'artifacts', window.appId, 'users', uid, 'data/gameState');
+                    await window.fb.updateDoc(uDoc, { coins: window.fb.increment(amt) });
+                    await window.fb.deleteDoc(window.fb.doc(window.fb.db, 'artifacts', window.appId, 'withdrawals', id));
+                }
+                alert("Action OK");
+            } catch(e) { alert(e.message); }
+        };
+
+        // UTILS
         function updateUI() {
             document.getElementById('coinDisp').textContent = Math.floor(state.coins);
             document.getElementById('eggsDisp').textContent = state.eggs;
             document.getElementById('maxDisp').textContent = state.basketMax;
-            const val = state.pendingVal;
-            document.getElementById('valDisp').textContent = val > 0 ? Math.floor(val) + '💰' : 'Min 30';
-            const countEl = document.getElementById('duckCount');
-            if(countEl) countEl.textContent = state.ducks.length;
-            const wBal = document.getElementById('wBal');
-            if(wBal) wBal.textContent = Math.floor(state.coins);
-            const refBal = document.getElementById('refBal');
-            if(refBal) refBal.textContent = state.refEarn;
-
-            const pct = Math.min((state.eggs/state.basketMax)*100, 100);
-            const bar = document.getElementById('basketBar');
-            if(bar) {
-                bar.style.height = pct + '%';
-                bar.className = pct >= 90 ? "absolute bottom-0 left-0 w-full bg-red-600 h-full transition-all duration-300" : "absolute bottom-0 left-0 w-full bg-blue-500 opacity-50 transition-all duration-300";
-            }
+            const v = state.pendingVal;
+            document.getElementById('valDisp').textContent = v > 0 ? Math.floor(v)+'💰' : 'Min 30';
             
-            const bBox = document.getElementById('basketBox');
-            if(bBox) {
-                if(pct >= 90) bBox.classList.add('danger-mode');
-                else bBox.classList.remove('danger-mode');
-            }
-
-            const upCost = Math.floor(50 * Math.pow(1.5, state.basketLvl - 1));
-            document.getElementById('upCost').textContent = upCost + '💰';
+            const pct = Math.min((state.eggs/state.basketMax)*100, 100);
+            document.getElementById('basketBar').style.width = pct + '%';
+            
+            document.getElementById('wBal').textContent = Math.floor(state.coins);
+            document.getElementById('refBal').textContent = state.refEarn;
 
             renderShop();
-            
-            if(state.coins < 150 && state.ducks.length === 0) document.getElementById('startHint').classList.remove('hidden');
-            else document.getElementById('startHint').classList.add('hidden');
         }
 
         function renderShop() {
-            const cont = document.getElementById('shopList');
-            cont.innerHTML = '';
+            const c = document.getElementById('shopList');
+            c.innerHTML = '';
             DUCKS.forEach(d => {
                 const can = state.coins >= d.cost;
                 const div = document.createElement('div');
-                div.className = `shrink-0 w-28 bg-slate-800 rounded p-2 border-2 ${can ? 'border-slate-500' : 'border-slate-700 opacity-60'} flex flex-col items-center gap-1`;
+                div.className = `shrink-0 w-28 bg-slate-800 rounded p-3 border-2 ${can?'border-slate-500':'border-slate-700 opacity-60'} flex flex-col items-center gap-1`;
                 div.innerHTML = `
                     <div class="flex justify-between w-full text-xs text-slate-400"><span>${d.name}</span></div>
-                    <div class="text-2xl">${d.emoji}</div>
-                    <div class="text-xs text-center text-slate-500">${(d.rate/1000).toFixed(1)}s</div>
+                    <div class="text-3xl my-1">${d.emoji}</div>
+                    <div class="text-[10px] text-slate-500">${d.rate/1000}s</div>
                     <button onclick="buyDuck(${d.id})" ${can?'':'disabled'} class="w-full text-xs font-bold py-1 rounded ${can?'bg-green-600 text-white':'bg-slate-700 text-slate-500'}">${d.cost}💰</button>
                 `;
-                cont.appendChild(div);
+                c.appendChild(div);
             });
         }
 
-        let depMethod = 'tron';
-        window.setDepMethod = function(m) {
-            depMethod = m;
-            document.getElementById('btnDepTron').className = m==='tron' ? "p-3 rounded border border-red-500 bg-red-900/20 text-red-400 text-xs font-bold ring-2 ring-red-500" : "p-3 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold";
-            document.getElementById('btnDepMob').className = m==='mobile' ? "p-3 rounded border border-airtel bg-red-900/10 text-airtel text-xs font-bold ring-2 ring-airtel" : "p-3 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold";
-            document.getElementById('depFormTron').classList.toggle('hidden', m!=='tron');
-            document.getElementById('depFormMobile').classList.toggle('hidden', m!=='mobile');
+        window.nav = (t) => {
+            ['game','bank','referral'].forEach(v => {
+                document.getElementById(v+'View').classList.add('hidden');
+                if(document.getElementById('n'+v.charAt(0).toUpperCase()+v.slice(1))) 
+                   document.getElementById('n'+v.charAt(0).toUpperCase()+v.slice(1)).classList.remove('active');
+            });
+            document.getElementById(t+'View').classList.remove('hidden');
+            if(t!=='game') document.getElementById(t+'View').classList.add('flex');
+            document.getElementById('n'+t.charAt(0).toUpperCase()+t.slice(1)).classList.add('active');
+            
+            if(t==='withdraw') calcWithdraw();
+            if(t==='deposit') {
+                 window.switchBankTab('deposit');
+            }
         }
 
-        window.calcDeposit = function() {
-            const usd = parseFloat(document.getElementById('depAmountUSD').value) || 0;
-            const fcfa = Math.floor(usd * 655);
-            const coinsEst = Math.floor(usd * COINS_PER_USD);
-            document.getElementById('depEstFCFA').textContent = fcfa;
-            document.getElementById('depEstCoins').textContent = coinsEst;
-            document.getElementById('mobAmountDisplay').textContent = fcfa + ' FCFA';
-        }
-
-        window.copyAddr = function() {
-            navigator.clipboard.writeText('TCQq5HjiWVHhiWdnSU3aPY7ewQAoB3rrCf');
-            showModal("Info", "Adresse copiée !");
-        }
-
-        window.submitDeposit = function() {
-            const usd = parseFloat(document.getElementById('depAmountUSD').value);
-            if(usd < 5) { showModal("Erreur", "Minimum $5.00"); return; }
+        window.switchBankTab = (tab) => {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab === 'deposit' ? 'tabDeposit' : 'tabWithdraw').classList.add('active');
             
-            const valid = depMethod === 'tron' ? document.getElementById('depHash').value.length > 8 : (document.getElementById('depMobId').value.length > 2 && document.getElementById('depMobNum').value.length > 5);
-            if(!valid) { showModal("Erreur", "Preuves de paiement requises."); return; }
-
-            const btn = document.getElementById('btnSubmitDep');
-            const originalText = "JE CONFIRME LE PAIEMENT";
-            let waitTime = depMethod === 'tron' ? 45 : 60; 
+            const activeBtn = "flex-1 py-2 text-xs font-bold rounded-lg bg-green-600 text-white shadow transition-all";
+            const inactiveBtn = "flex-1 py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition-all";
             
-            btn.disabled = true;
-            btn.className = "w-full bg-slate-700 text-slate-400 font-bold py-4 rounded-xl cursor-not-allowed";
-            
-            const timer = setInterval(() => {
-                waitTime--;
-                btn.textContent = `Vérification... ${waitTime}s`;
-                if(waitTime <= 0) {
-                    clearInterval(timer);
-                    const fcfa = Math.floor(usd * 655);
-                    const coinsToAdd = Math.floor(usd * COINS_PER_USD);
-                    state.coins += coinsToAdd;
-                    saveGame();
-                    
-                    if(window.db && window.doc) {
-                        const statsDoc = window.doc(window.db, 'artifacts', window.appId, 'admin', 'stats');
-                        if(depMethod === 'tron') window.setDoc(statsDoc, { cryptoDep: window.increment(usd) }, { merge: true });
-                        else window.setDoc(statsDoc, { mobileDep: window.increment(fcfa) }, { merge: true });
+            document.getElementById('tabBtnDep').className = tab === 'deposit' ? activeBtn : inactiveBtn;
+            document.getElementById('tabBtnWith').className = tab === 'withdraw' ? activeBtn.replace('bg-green-600', 'bg-red-600') : inactiveBtn;
 
-                        window.addDoc(window.collection(window.db, 'artifacts', window.appId, 'admin_deposits'), {
-                            user: window.currentUserEmail,
-                            amount: depMethod === 'tron' ? usd + ' $' : fcfa + ' FCFA',
-                            method: depMethod,
-                            ref: document.getElementById(depMethod === 'tron' ? 'depHash' : 'depMobId').value,
-                            date: Date.now()
-                        });
-                    }
-
-                    updateUI();
-                    window.nav('game');
-                    btn.textContent = originalText;
-                    btn.disabled = false;
-                    btn.className = "w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg";
-                    showModal("Paiement Reçu", `+${coinsToAdd} Pièces ajoutées au solde.`);
-                    document.getElementById('depHash').value = '';
-                    document.getElementById('depMobId').value = '';
-                }
-            }, 1000);
-        }
-
-        window.calcWithdraw = function() {
-            const amt = parseInt(document.getElementById('wAmount').value) || 0;
-            const method = document.getElementById('wMethod').value;
-            let valStr = "";
-            let feeTxt = "";
-            
-            if(method === 'airtel') {
-                const gross = (amt / 1000) * FCFA_PER_1000;
-                const net = Math.floor(gross * 0.87); 
-                valStr = net + " FCFA";
-                feeTxt = "13%";
+            if(tab === 'deposit') {
+                window.setDepMethod('tron');
             } else {
-                const gross = (amt / 1000) * TRX_PER_1000;
-                const net = (gross * 0.99).toFixed(8);
-                valStr = net + " TRX";
-                feeTxt = "1%";
+                window.calcWithdraw();
             }
-            document.getElementById('wEst').textContent = valStr;
-            document.getElementById('wFeeTxt').textContent = feeTxt;
-            document.getElementById('wBtn').disabled = !(amt >= 1000 && amt <= state.coins && document.getElementById('wAddr').value.length > 5);
         }
 
-        window.submitWithdraw = function() {
-            const amt = parseInt(document.getElementById('wAmount').value);
-            const addr = document.getElementById('wAddr').value;
-            const method = document.getElementById('wMethod').value;
-            state.coins -= amt;
-            saveGame();
-            updateUI();
-            
-            if(window.db && window.collection) {
-                window.addDoc(window.collection(window.db, 'artifacts', window.appId, 'withdrawals'), {
-                    uid: window.currentUserId,
-                    email: window.currentUserEmail,
-                    amount: amt,
-                    method: method,
-                    address: addr,
-                    date: Date.now(),
-                    status: 'pending'
-                });
-            }
+        window.doLogout = () => window.fb.signOut(window.fb.auth).then(()=>location.reload());
+        
+        window.showModal = (t, m) => {
+            document.getElementById('mTitle').textContent = t;
+            document.getElementById('mMsg').innerHTML = m;
+            document.getElementById('modal').classList.remove('hidden');
+        };
+        
+        window.copyAddr = () => {
+            navigator.clipboard.writeText("TCQq5HjiWVHhiWdnSU3aPY7ewQAoB3rrCf");
+            alert("Copié !");
+        };
 
-            showModal("Demande Envoyée", "Le virement sera effectué sous 24h.");
-            const hist = document.getElementById('wHistory');
-            hist.innerHTML = `<div>- ${amt} coins <span class="text-orange-500">En cours (24h)</span></div>` + hist.innerHTML;
-            document.getElementById('wAmount').value = '';
-            calcWithdraw();
-        }
-
-        function initReferralSim() {
-            setInterval(() => {
-                if(Math.random() > 0.8) { 
-                    const duck = DUCKS[Math.floor(Math.random() * DUCKS.length)];
-                    const comm = duck.comm;
-                    state.refEarn += comm;
-                    const l = document.getElementById('refLogs');
-                    l.innerHTML = `<div class="bg-slate-800 p-2 rounded text-[10px] flex justify-between border border-slate-700"><span>Achat Filleul (${duck.name})</span><span class="text-green-400 font-bold">+${comm}💰</span></div>` + l.innerHTML;
-                    if(document.getElementById('referralView').classList.contains('hidden')) {
-                        document.getElementById('refPing').classList.remove('hidden');
-                    }
-                    updateUI();
-                }
-            }, 15000); 
-        }
-
-        window.copyRef = function() {
+        window.copyRef = () => {
             navigator.clipboard.writeText(document.getElementById('refLink').value);
-            showModal("Info", "Lien copié !");
-        }
+            alert("Lien copié !");
+        };
 
-        window.claimRef = function() {
+        window.claimRef = () => {
             state.coins += state.refEarn;
             state.refEarn = 0;
-            saveGame();
+            saveState();
             updateUI();
-            document.getElementById('refPing').classList.add('hidden');
-        }
+        };
 
-        window.nav = function(tab) {
-            ['game','deposit','withdraw','referral'].forEach(t => {
-                document.getElementById(t+'View').classList.add('hidden');
-                const navId = navIds[t];
-                if(document.getElementById(navId)) document.getElementById(navId).classList.remove('active');
-            });
-            const v = document.getElementById(tab+'View');
-            if(v) v.classList.remove('hidden');
-            if(tab !== 'game' && v) v.classList.add('flex');
-            const activeNav = document.getElementById(navIds[tab]);
-            if(activeNav) activeNav.classList.add('active');
-            if(tab==='withdraw') calcWithdraw();
-            if(tab==='deposit') calcDeposit();
-        }
+        window.cleanMess = () => {
+            document.getElementById('brokenOverlay').classList.add('hidden');
+            state.eggs = 0;
+            state.pendingVal = 0;
+            saveState();
+            updateUI();
+        };
 
-        function showModal(title, msg) {
-            document.getElementById('mTitle').textContent = title;
-            document.getElementById('mMsg').textContent = msg;
-            document.getElementById('modal').classList.remove('hidden');
-        }
     </script>
 </body>
 </html>
-
-
