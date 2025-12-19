@@ -11,7 +11,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc, increment, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, where, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc, increment, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
           apiKey: "AIzaSyB5doP59G7ZTYfkYE1wFm4Q8mlYRnfGZzs",
@@ -30,7 +30,7 @@
             try { enableIndexedDbPersistence(db).catch(() => {}); } catch(e) {}
 
             window.fb = {
-                auth, db, doc, collection, addDoc, deleteDoc, getDocs, updateDoc, increment, onSnapshot, setDoc, getDoc, query, orderBy, limit, where,
+                auth, db, doc, collection, addDoc, deleteDoc, getDocs, updateDoc, increment, onSnapshot, setDoc, getDoc, query, orderBy, limit,
                 signIn: signInWithEmailAndPassword,
                 signUp: createUserWithEmailAndPassword,
                 signOut: signOut,
@@ -38,20 +38,13 @@
             };
             window.appId = 'empireduck-live'; 
 
-            // Capture du parrain via URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const refId = urlParams.get('ref');
-            if (refId) {
-                localStorage.setItem('empireDuck_referrer_id', refId);
-                console.log("Parrain détecté:", refId);
-            }
-
             onAuthStateChanged(auth, (user) => {
                 const loader = document.getElementById('globalLoader');
                 if (user) {
                     window.currentUser = user;
                     if(typeof window.initGameSession === 'function') {
-                         window.initGameSession(user.uid, user.email);
+                         const name = user.email ? user.email.split('@')[0] : 'Joueur';
+                         window.initGameSession(user.uid, name);
                     }
                 } else {
                     document.getElementById('authView').classList.remove('hidden');
@@ -60,7 +53,7 @@
             });
 
         } catch (e) {
-            console.error("Erreur Init:", e);
+            console.error("Erreur Init Firebase:", e);
             alert("Erreur système: " + e.message);
         }
     </script>
@@ -68,34 +61,10 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
         body { font-family: 'Fredoka', sans-serif; user-select: none; overflow: hidden; touch-action: manipulation; background-color: #0f172a; color: #f8fafc; }
-        
         .warehouse-bg { background-color: #451a03; background-image: repeating-linear-gradient(45deg, #78350f 25%, transparent 25%, transparent 75%, #78350f 75%, #78350f), repeating-linear-gradient(45deg, #78350f 25%, transparent 25%, transparent 75%, #78350f 75%, #78350f); background-position: 0 0, 10px 10px; background-size: 20px 20px; box-shadow: inset 0 0 100px #000; }
-        
-        /* Enclos Flexbox pour alignement */
-        .coop-area { 
-            background-color: #3f1d0b; 
-            border-top: 4px dashed #cd853f; 
-            box-shadow: inset 0 10px 20px rgba(0,0,0,0.8); 
-            position: relative;
-            display: flex;
-            flex-wrap: wrap;
-            align-content: flex-start;
-            padding: 10px;
-            gap: 5px;
-            overflow-y: auto; 
-        }
-
-        .duck-sprite { 
-            font-size: 2rem; 
-            cursor: pointer; 
-            transition: transform 0.1s; 
-            filter: drop-shadow(0 4px 2px rgba(0,0,0,0.5)); 
-            /* Animation respiration */
-            animation: breathe 2s infinite ease-in-out;
-        }
-        @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-        .duck-sprite:active { transform: scale(0.9); }
-
+        .coop-area { background-color: #3f1d0b; border-top: 4px dashed #cd853f; box-shadow: inset 0 10px 20px rgba(0,0,0,0.8); position: relative; }
+        .duck-sprite { position: absolute; font-size: 2.5rem; z-index: 10; cursor: pointer; transition: transform 0.1s; filter: drop-shadow(0 4px 2px rgba(0,0,0,0.5)); }
+        .duck-sprite:active { transform: scale(1.2); }
         .hide-scroll::-webkit-scrollbar { display: none; } .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
         .nav-item.active { color: #fbbf24; border-top: 3px solid #fbbf24; background: linear-gradient(to top, rgba(251, 191, 36, 0.1), transparent); }
         .bg-airtel { background-color: #e30613; } .text-airtel { color: #e30613; } .border-airtel { border-color: #e30613; }
@@ -115,7 +84,7 @@
         <p class="text-slate-500 text-sm uppercase tracking-widest font-bold">Chargement...</p>
     </div>
 
-    <!-- AUTH -->
+    <!-- AUTHENTIFICATION -->
     <div id="authView" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900 p-6 hidden">
         <div class="w-full max-w-sm bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-700 relative">
             <h1 class="text-3xl font-bold text-orange-500 text-center mb-1">EmpireDuck</h1>
@@ -127,13 +96,25 @@
             </div>
 
             <div class="space-y-4">
-                <input type="email" id="authEmail" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-orange-500 outline-none" placeholder="Email (Gmail)">
-                <input type="password" id="authPass" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-orange-500 outline-none" placeholder="Mot de passe">
-                <div id="confPassDiv" class="hidden">
-                    <input type="password" id="authConf" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-orange-500 outline-none" placeholder="Confirmer MDP">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold ml-1">Email</label>
+                    <input type="email" id="authEmail" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-orange-500 outline-none transition-colors" placeholder="votre@email.com">
                 </div>
-                <div id="authError" class="text-red-400 text-xs text-center hidden"></div>
-                <button onclick="window.handleAuthAction()" id="authBtn" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-all">SE CONNECTER</button>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold ml-1">Mot de passe</label>
+                    <input type="password" id="authPass" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-orange-500 outline-none transition-colors" placeholder="••••••••">
+                </div>
+                <!-- Champ Confirm -->
+                <div id="confPassDiv" class="hidden">
+                    <label class="text-xs text-slate-400 font-bold ml-1">Confirmer Mot de passe</label>
+                    <input type="password" id="authConf" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-orange-500 outline-none transition-colors" placeholder="••••••••">
+                </div>
+                
+                <div id="authError" class="text-red-400 text-xs text-center p-3 bg-red-900/20 rounded border border-red-900 hidden font-bold"></div>
+                
+                <button onclick="window.handleAuthAction()" id="authBtn" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-all">
+                    SE CONNECTER
+                </button>
             </div>
         </div>
     </div>
@@ -166,7 +147,7 @@
 
                 <div class="h-10 px-2 bg-yellow-900/80 rounded border-2 border-yellow-500 flex items-center justify-center min-w-[60px] relative shadow-md">
                     <span id="coinDisp" class="font-bold text-white text-sm">0</span> <span class="text-xs ml-1">💰</span>
-                    <button onclick="window.doLogout()" class="absolute -top-2 -right-2 bg-red-600 w-5 h-5 rounded-full flex items-center justify-center text-[10px] border border-slate-900 shadow-md z-20"><i class="fa-solid fa-power-off"></i></button>
+                    <button onclick="window.doLogout()" class="absolute -top-2 -right-2 bg-red-600 w-5 h-5 rounded-full flex items-center justify-center text-[10px] border border-slate-900 shadow-md z-20" title="Déconnexion"><i class="fa-solid fa-power-off"></i></button>
                 </div>
             </div>
         </div>
@@ -183,84 +164,123 @@
                 </div>
             </div>
 
-            <!-- ENCLOS AGRANDI & ALIGNÉ -->
+            <!-- ENCLOS AGRANDI -->
             <div id="coop" class="coop-area w-full h-full relative overflow-y-auto shrink-0 shadow-inner">
-                <!-- Canards alignés ici -->
+                <!-- Canards ici -->
             </div>
 
             <div id="brokenOverlay" class="hidden absolute inset-0 bg-red-900/95 z-[60] flex flex-col items-center justify-center px-4 text-center">
                 <div class="text-5xl mb-2">💥</div>
                 <h2 class="text-2xl font-bold text-white uppercase">PANIER CRAQUÉ !</h2>
                 <p class="text-red-200 text-xs mb-4">Votre panier a débordé pendant votre absence.<br>Tous les œufs sont perdus.</p>
-                <button onclick="window.cleanMess()" class="bg-white text-red-900 px-6 py-2 rounded-full font-bold text-sm shadow-lg active:scale-95">NETTOYER</button>
+                <button onclick="window.cleanMess()" class="bg-white text-red-900 px-6 py-2 rounded-full font-bold text-sm shadow-lg active:scale-95 transform transition-transform">NETTOYER</button>
             </div>
         </div>
 
-        <div class="bg-slate-900 p-2 shrink-0 border-t-4 border-slate-700 h-auto pb-24 z-30 shadow-lg">
+        <div class="bg-slate-900 p-2 shrink-0 border-t-4 border-slate-700 h-auto pb-24 z-30 shadow-[0_-5px_10px_rgba(0,0,0,0.5)]">
             <div class="flex gap-2 overflow-x-auto hide-scroll pb-safe" id="shopList"></div>
         </div>
     </div>
 
-    <!-- BANQUE -->
+    <!-- BANQUE (DÉPÔT / RETRAIT) -->
     <div id="bankView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto pb-24 pt-4 px-4">
-        <h2 class="text-center text-xl font-bold text-white mb-4"><i class="fa-solid fa-building-columns text-yellow-500 mr-2"></i> BANQUE</h2>
+        <h2 class="text-center text-xl font-bold text-white mb-4 flex justify-center items-center gap-2">
+            <i class="fa-solid fa-building-columns text-yellow-500 mr-2"></i> BANQUE
+        </h2>
+        
         <div class="flex bg-slate-800 p-1 rounded-xl mb-6 shadow-lg">
-            <button onclick="window.switchBankTab('deposit')" id="tabBtnDep" class="flex-1 py-2 text-xs font-bold rounded-lg bg-green-600 text-white shadow">DÉPÔT</button>
-            <button onclick="window.switchBankTab('withdraw')" id="tabBtnWith" class="flex-1 py-2 text-xs font-bold rounded-lg text-slate-400">RETRAIT</button>
+            <button onclick="window.switchBankTab('deposit')" id="tabBtnDep" class="flex-1 py-2 text-xs font-bold rounded-lg bg-green-600 text-white shadow transition-all">DÉPÔT</button>
+            <button onclick="window.switchBankTab('withdraw')" id="tabBtnWith" class="flex-1 py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition-all">RETRAIT</button>
         </div>
 
+        <!-- Section DÉPÔT -->
         <div id="tabDeposit" class="tab-content active space-y-4">
-            <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-green-500/50 shadow-xl text-center relative overflow-hidden">
+            
+            <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-green-500/50 shadow-xl relative overflow-hidden text-center">
                 <div class="absolute top-0 right-0 bg-green-600 text-white text-[9px] px-2 py-1 rounded-bl-lg font-bold">PRIX FIXE</div>
-                <h3 class="text-sm text-slate-400 uppercase font-bold mb-2">Pack Investisseur</h3>
-                <div class="text-4xl font-bold text-white mb-2">$6 <span class="text-sm text-slate-500">USD</span></div>
-                <div class="text-yellow-400 font-bold mb-2"><i class="fa-solid fa-coins"></i> 500 Pièces</div>
-                <div class="text-xs text-slate-400 border-t border-slate-700 pt-2">Soit <span class="text-white font-bold">3930 FCFA</span></div>
+                <h3 class="text-sm text-slate-400 uppercase tracking-widest mb-2 font-bold">Pack Investisseur</h3>
+                <div class="flex justify-center items-baseline gap-2 mb-4">
+                    <span class="text-4xl font-bold text-white">$6</span>
+                    <span class="text-sm text-slate-500">USD</span>
+                </div>
+                <div class="bg-black/30 rounded-lg p-2 mb-4 border border-white/10">
+                    <p class="text-yellow-400 font-bold text-lg flex justify-center items-center gap-2">
+                        <i class="fa-solid fa-coins"></i> 500 Pièces
+                    </p>
+                </div>
+                <div class="text-xs text-slate-400 border-t border-slate-700 pt-2">
+                    Soit environ <span class="text-white font-bold">3930 FCFA</span>
+                </div>
             </div>
+            
             <div class="grid grid-cols-2 gap-2">
                 <button onclick="window.setDepMethod('tron')" id="btnDepTron" class="p-3 rounded border border-red-500 bg-red-900/20 text-red-400 text-xs font-bold">Crypto (TRX)</button>
                 <button onclick="window.setDepMethod('mobile')" id="btnDepMob" class="p-3 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs font-bold">Mobile Money</button>
             </div>
+
             <div id="depForm" class="space-y-3">
                 <div id="addrBox" class="bg-slate-800 p-3 rounded border border-slate-600">
                     <p class="text-[10px] text-slate-400 mb-1" id="addrLabel">Adresse TRC20 :</p>
-                    <div class="flex gap-2"><code id="addrVal" class="bg-black/30 p-2 rounded text-[10px] text-slate-300 truncate flex-1">TCQq5HjiWVHhiWdnSU3aPY7ewQAoB3rrCf</code><button onclick="window.copyAddr()" class="text-slate-400"><i class="fa-regular fa-copy"></i></button></div>
+                    <div class="flex gap-2"><code id="addrVal" class="bg-black/30 p-2 rounded text-[10px] text-slate-300 truncate flex-1 font-mono">TCQq5HjiWVHhiWdnSU3aPY7ewQAoB3rrCf</code><button onclick="window.copyAddr()" class="text-slate-400 hover:text-white"><i class="fa-regular fa-copy"></i></button></div>
                 </div>
+
                 <div id="mobileInfo" class="hidden bg-slate-800 p-4 rounded border border-airtel text-center">
-                    <p class="text-[10px] text-slate-400 uppercase">Montant exact</p>
-                    <p class="text-2xl font-bold text-airtel mb-2">3930 FCFA</p>
-                    <div class="bg-black/30 p-2 rounded mb-2"><p class="text-[10px] text-slate-400">Numéro Airtel :</p><p class="text-lg font-bold text-white tracking-widest select-all">077408087</p></div>
-                    <div class="text-[10px] text-green-400 text-left space-y-1">
-                        <p><i class="fa-solid fa-check"></i> Via <b>Gimacpay</b> possible</p>
-                        <p><i class="fa-solid fa-location-dot"></i> Uniquement au <b>Gabon</b></p>
+                    <div class="mb-3">
+                        <p class="text-[10px] text-slate-400 uppercase mb-1">Montant à envoyer</p>
+                        <p class="text-2xl font-bold text-airtel">3930 FCFA</p>
+                    </div>
+                    <div class="mb-3 p-2 bg-black/30 rounded">
+                        <p class="text-[10px] text-slate-400 mb-1">Numéro Airtel Money :</p>
+                        <p class="text-lg font-bold text-white tracking-widest select-all">077408087</p>
+                    </div>
+                    <div class="text-[10px] text-green-400 flex flex-col gap-1">
+                        <span><i class="fa-solid fa-check"></i> Possible par <b>Gimacpay</b></span>
+                        <span><i class="fa-solid fa-location-dot"></i> Uniquement au <b>Gabon</b></span>
                     </div>
                 </div>
+
                 <input type="text" id="depProof" placeholder="ID Transaction / Preuve" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-xs focus:border-green-500 outline-none">
             </div>
-            <p id="depTimeInfo" class="text-[10px] text-slate-500 text-center"><i class="fa-solid fa-clock"></i> Validation : ~5 secondes</p>
-            <button onclick="window.doDeposit()" id="btnDoDep" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-green-800 active:border-b-0 active:translate-y-1">JE CONFIRME LE PAIEMENT</button>
+            
+            <p id="depTimeInfo" class="text-[10px] text-slate-500 text-center"><i class="fa-solid fa-clock"></i> Temps de validation : ~5 secondes</p>
+            
+            <button onclick="window.doDeposit()" id="btnDoDep" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-green-800 active:border-b-0 active:translate-y-1 transition-all">JE CONFIRME LE PAIEMENT</button>
         </div>
 
         <!-- Section RETRAIT -->
         <div id="tabWithdraw" class="tab-content space-y-4">
-            <div class="bg-slate-800 p-4 rounded-xl flex justify-between items-center border border-slate-600">
+            <div class="bg-slate-800 p-4 rounded-xl flex justify-between items-center border border-slate-600 shadow-md">
                 <span class="text-xs text-slate-400 font-bold uppercase">Solde</span>
                 <span class="text-xl font-bold text-yellow-400"><span id="wBal">0</span> 💰</span>
             </div>
-            <div class="bg-slate-800/50 p-2 rounded text-[10px] text-slate-400 text-center border border-dashed border-slate-600">1000 P = 1500 FCFA | 0.000723 TRX</div>
-            <input type="number" id="wAmount" placeholder="Montant (Min 1000)" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white" oninput="window.calcWithdraw()">
+            
+            <div class="bg-blue-900/20 p-2 rounded text-[10px] text-blue-300 text-center border border-blue-500/30">
+                <i class="fa-solid fa-circle-info mr-1"></i> Traitement sous 24h ouvrées
+            </div>
+             <div class="bg-slate-800/50 p-2 rounded text-[10px] text-slate-400 text-center border border-dashed border-slate-600">
+                1000 P = 1500 FCFA | 0.000723 TRX
+            </div>
+
+            <input type="number" id="wAmount" placeholder="Montant (Min 1000)" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white transition-colors" oninput="window.calcWithdraw()">
+            
             <div class="flex justify-between items-center bg-black/20 p-3 rounded border border-slate-700">
                 <span class="text-xs text-slate-400">Net à recevoir :</span>
                 <span id="wEst" class="font-bold text-white text-sm">0 FCFA</span>
             </div>
+            
             <select id="wMethod" class="w-full bg-slate-800 border border-slate-600 rounded p-3 text-xs mb-2 text-white" onchange="window.calcWithdraw()">
                 <option value="airtel">Airtel Money (13% frais)</option>
                 <option value="tron">Crypto TRON (1% frais)</option>
             </select>
-            <input type="text" id="wAddr" placeholder="Numéro ou Adresse..." class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white">
-            <button onclick="window.doWithdraw()" id="wBtn" disabled class="w-full bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-red-800 active:border-b-0 active:translate-y-1">DEMANDER LE RETRAIT</button>
-            <div class="text-center text-[10px] text-slate-500 mt-2"><i class="fa-solid fa-clock"></i> Traitement sous 24h ouvrées</div>
-            <div id="wHistory" class="space-y-2 mt-4 text-xs text-slate-500"></div>
+            
+            <input type="text" id="wAddr" placeholder="Numéro ou Adresse..." class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm focus:border-blue-500 outline-none text-white transition-colors" oninput="window.calcWithdraw()">
+            
+            <button onclick="window.doWithdraw()" id="wBtn" disabled class="w-full bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg border-b-4 border-red-800 active:border-b-0 active:translate-y-1 transition-all">DEMANDER LE RETRAIT</button>
+            
+            <div class="mt-4">
+                <h3 class="text-[10px] font-bold text-slate-500 uppercase border-b border-slate-700 pb-1 mb-2">Historique Retraits</h3>
+                <div id="wHistory" class="space-y-2 text-xs text-slate-500"></div>
+            </div>
         </div>
     </div>
 
@@ -272,9 +292,6 @@
                 <input type="text" id="refLink" readonly class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-300 truncate">
                 <button onclick="window.copyRef()" class="bg-blue-600 px-3 rounded text-white text-xs"><i class="fa-regular fa-copy"></i></button>
             </div>
-            <div id="refList" class="space-y-2 text-xs text-slate-400">
-                <p class="text-center italic">Vos filleuls apparaîtront ici.</p>
-            </div>
             <div class="bg-gradient-to-r from-yellow-900 to-slate-900 p-4 rounded-xl border border-yellow-500/50 flex justify-between items-center shadow-lg">
                 <div class="text-2xl font-bold text-white"><span id="refBal">0</span> 💰</div>
                 <button onclick="window.claimRef()" id="btnRefClaim" disabled class="bg-yellow-500 disabled:bg-slate-700 text-black font-bold py-2 px-4 rounded text-xs shadow-md">RÉCLAMER</button>
@@ -284,27 +301,27 @@
 
     <!-- ADMIN -->
     <div id="adminView" class="hidden flex-grow flex-col bg-slate-900 overflow-y-auto z-[200]">
-        <div class="bg-red-900 p-4 border-b border-red-700 flex justify-between items-center sticky top-0 z-10">
-            <h1 class="text-lg font-bold text-white">ADMIN PANEL</h1>
-            <button onclick="window.doLogout()" class="bg-red-800 px-3 py-1 rounded text-xs">Exit</button>
+        <div class="bg-red-900 p-4 border-b border-red-700 flex justify-between items-center sticky top-0 z-10 shadow-lg">
+            <h1 class="text-lg font-bold text-white flex items-center gap-2"><i class="fa-solid fa-shield-halved"></i> ADMIN PANEL</h1>
+            <button onclick="window.doLogout()" class="bg-red-800 px-3 py-1 rounded text-xs font-bold transition-colors">Exit</button>
         </div>
-        <div class="p-4 space-y-6">
+        <div class="p-4 space-y-6 max-w-2xl mx-auto w-full">
             <div class="grid grid-cols-2 gap-4">
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="text-[10px] text-slate-400">Total Crypto</div>
-                    <div class="text-xl font-bold text-green-400" id="admTotalCrypto">0 $</div>
+                    <div class="text-[10px] text-slate-400 uppercase font-bold mb-1">Total Crypto</div>
+                    <div class="text-xl sm:text-2xl font-bold text-green-400" id="admTotalCrypto">0 $</div>
                 </div>
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="text-[10px] text-slate-400">Total Mobile</div>
-                    <div class="text-xl font-bold text-blue-400" id="admTotalMobile">0 FCFA</div>
+                    <div class="text-[10px] text-slate-400 uppercase font-bold mb-1">Total Mobile</div>
+                    <div class="text-xl sm:text-2xl font-bold text-blue-400" id="admTotalMobile">0 FCFA</div>
                 </div>
             </div>
             <div>
-                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700">Dépôts</h3>
+                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700 pb-2">Derniers Dépôts</h3>
                 <div id="admDepositsList" class="space-y-2 text-xs"></div>
             </div>
             <div>
-                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700">Retraits</h3>
+                <h3 class="text-white text-sm font-bold mb-3 border-b border-slate-700 pb-2">Demandes de Retrait</h3>
                 <div id="admWithdrawList" class="space-y-2 text-xs"></div>
             </div>
         </div>
@@ -319,7 +336,7 @@
 
     <!-- MODAL -->
     <div id="modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[400] flex items-center justify-center p-4">
-        <div class="bg-slate-800 p-6 rounded-xl border border-slate-600 w-full max-w-xs text-center shadow-2xl scale-100 transition-transform">
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-600 w-full max-w-xs text-center shadow-2xl transform transition-all scale-100">
             <h3 id="mTitle" class="text-lg font-bold text-white mb-2"></h3>
             <p id="mMsg" class="text-sm text-slate-300 mb-6 leading-relaxed">Contenu</p>
             <button onclick="document.getElementById('modal').classList.add('hidden')" class="bg-slate-700 hover:bg-slate-600 w-full py-3.5 rounded-xl text-white font-bold transition-colors">FERMER</button>
@@ -331,15 +348,15 @@
         const DUCKS = [
             { id: 1, name: "Poussin", cost: 150, val: 0.5, rate: 30000, emoji: '🐥', comm: 2 },
             { id: 2, name: "Colvert", cost: 600, val: 2.5, rate: 45000, emoji: '🦆', comm: 5 },
-            { id: 3, name: "Oie", cost: 2500, val: 12.5, rate: 60000, emoji: '🦢', comm: 10 },
+            { id: 3, name: "Oie", cost: 2500, val: 12.5, rate: 20000, emoji: '🦢', comm: 10 },
             { id: 4, name: "Doré", cost: 12000, val: 75, rate: 15000, emoji: '👑', comm: 15 },
             { id: 5, name: "Cyborg", cost: 30000, val: 200, rate: 10000, emoji: '🤖', comm: 18 },
-            { id: 6, name: "Quantum", cost: 60000, val: 500, rate: 5000, emoji: '⚛️', comm: 20 }
+            { id: 6, name: "Quantum", cost: 60000, val: 500, rate: 10000, emoji: '⚛️', comm: 20 }
         ];
 
         const TRX_PER_1000 = 0.000723;
         const FCFA_PER_1000 = 1500;
-        const COINS_PER_USD = 100;
+        const COINS_PER_USD = 83.33; // 500 / 6
 
         let state = { coins: 0, eggs: 0, pendingVal: 0, basketMax: 50, basketLvl: 1, ducks: [], refEarn: 0, referrer: null };
         let isRegistering = false;
@@ -359,6 +376,7 @@
         window.toggleAuth = (mode) => {
             isRegistering = (mode === 'register');
             document.getElementById('authBtn').textContent = isRegistering ? "S'INSCRIRE" : "SE CONNECTER";
+            document.getElementById('authBtn').className = isRegistering ? "w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg mt-2 transition-all" : "w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg mt-2 transition-all";
             document.getElementById('confPassDiv').classList.toggle('hidden', !isRegistering);
             document.getElementById('tabLogin').className = !isRegistering ? "flex-1 py-3 text-xs font-bold rounded bg-slate-700 text-white transition-colors" : "flex-1 py-3 text-xs font-bold rounded text-slate-500 transition-colors";
             document.getElementById('tabReg').className = isRegistering ? "flex-1 py-3 text-xs font-bold rounded bg-slate-700 text-white transition-colors" : "flex-1 py-3 text-xs font-bold rounded text-slate-500 transition-colors";
@@ -370,34 +388,61 @@
             const pass = document.getElementById('authPass').value;
             const conf = document.getElementById('authConf').value;
             const errDiv = document.getElementById('authError');
+            const btn = document.getElementById('authBtn');
+            const originalText = btn.textContent;
             
-            if(!email || pass.length < 6) return alert("Email + MDP (6 car.) requis");
+            if(!email || pass.length < 6) {
+                errDiv.textContent = "Email valide et mot de passe (6+) requis.";
+                errDiv.classList.remove('hidden');
+                return;
+            }
 
             if(email.toLowerCase() === 'viva123@gmail.com' && pass === 'admin2006') {
                 openAdmin();
                 return;
             }
 
-            if(isRegistering && pass !== conf) return alert("MDP non identiques");
+            if(isRegistering && pass !== conf) {
+                errDiv.textContent = "Les mots de passe ne correspondent pas.";
+                errDiv.classList.remove('hidden');
+                return;
+            }
 
-            document.getElementById('authBtn').textContent = "Chargement...";
-            
+            btn.textContent = "Chargement...";
+            btn.disabled = true;
+
+            const timeoutId = setTimeout(() => {
+                if(btn.disabled) {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    errDiv.innerHTML = "Délai dépassé. Vérifiez votre connexion.";
+                    errDiv.classList.remove('hidden');
+                }
+            }, 10000);
+
             try {
+                if(!window.fb) throw new Error("Système non prêt");
+
                 if(isRegistering) {
-                    const cred = await window.fb.signUp(window.fb.auth, email, pass);
-                    // Save Referrer if exists
-                    const refId = localStorage.getItem('empireDuck_referrer_id');
-                    if(refId) {
-                        const userRef = window.fb.doc(window.fb.db, 'artifacts', window.appId, 'users', cred.user.uid, 'data/gameState');
-                        await window.fb.setDoc(userRef, { referrer: refId }, { merge: true });
-                    }
+                    await window.fb.signUp(window.fb.auth, email, pass);
                 } else {
                     await window.fb.signIn(window.fb.auth, email, pass);
                 }
+                
+                clearTimeout(timeoutId);
+
             } catch(e) {
-                errDiv.textContent = "Erreur: " + e.code;
+                clearTimeout(timeoutId);
+                let msg = e.code;
+                if(e.code === 'auth/email-already-in-use') msg = "Cet email est déjà inscrit.";
+                if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') msg = "Identifiants incorrects.";
+                if(e.code === 'auth/user-not-found') msg = "Compte inexistant. Inscrivez-vous.";
+                if(e.code === 'auth/operation-not-allowed') msg = "L'inscription est désactivée dans la console.";
+                
+                errDiv.textContent = msg || "Erreur inconnue";
                 errDiv.classList.remove('hidden');
-                document.getElementById('authBtn').textContent = isRegistering ? "S'INSCRIRE" : "SE CONNECTER";
+                btn.textContent = originalText;
+                btn.disabled = false;
             }
         };
 
@@ -410,7 +455,8 @@
             document.getElementById('gameView').classList.remove('hidden');
             document.getElementById('gameView').classList.add('flex');
             document.getElementById('navBar').classList.remove('hidden');
-            document.getElementById('refLink').value = window.location.origin + "?ref=" + uid.substring(0, 8);
+            document.getElementById('globalLoader').classList.add('hidden');
+            document.getElementById('refLink').value = window.location.origin + "?ref=" + uid.substring(5);
 
             const docRef = window.fb.doc(window.fb.db, 'artifacts', window.appId, 'users', uid, 'data/gameState');
             window.fb.onSnapshot(docRef, (snap) => {
@@ -420,7 +466,6 @@
                     state.basketMax = d.basketMax || 50;
                     state.basketLvl = d.basketLvl || 1;
                     state.refEarn = d.refEarn || 0;
-                    state.referrer = d.referrer || null;
                     
                     if(JSON.stringify(d.ducks) !== JSON.stringify(state.ducks)) {
                         state.ducks = d.ducks || [];
@@ -432,32 +477,25 @@
                 }
                 updateUI();
             });
-            
-            // Charger la liste des filleuls
-            const qRef = window.fb.query(window.fb.collection(window.fb.db, 'artifacts', window.appId, 'users'), window.fb.where('data.gameState.referrer', '==', uid.substring(0,8)));
-            // Note: Cette requête complexe nécessite un index Firestore. Pour éviter l'erreur ici, on skip l'affichage liste.
-            // On affiche juste le compteur dans updateUI si possible, ou on laisse vide.
 
             setInterval(saveState, 5000);
+            
+            // Charger la liste des filleuls
+            const qRef = window.fb.query(window.fb.collection(window.fb.db, 'artifacts', window.appId, 'users'), window.fb.where('data.gameState.referrer', '==', uid.substring(5)));
         };
 
         // --- GAMEPLAY ---
-        window.buyDuck = (id) => {
+        window.buyDuck = async (id) => {
             const d = DUCKS.find(x => x.id === id);
             if(state.coins >= d.cost) {
                 state.coins -= d.cost;
                 state.ducks.push({ id: Date.now(), typeId: id });
                 spawnDuck(d);
-                
-                // Commission Parrain
-                if(state.referrer) {
-                    // Chercher le doc du parrain via son shortUID est dur sans index
-                    // On simplifie: on n'implémente pas la commission cross-user ici pour la stabilité
-                    // Idéalement ça se fait via Cloud Functions
-                }
-
                 saveState();
                 updateUI();
+                
+                // Parrainage Auto (Simplifié)
+                // Dans un vrai système, cloud function. Ici, simulation locale.
             }
         };
 
@@ -525,7 +563,7 @@
         };
 
         window.calcDeposit = () => {
-            // Pas de calcul, prix fixe
+            // Pas de calcul dynamique, prix fixe
         };
 
         window.doDeposit = () => {
@@ -553,11 +591,13 @@
             setTimeout(() => {
                 clearInterval(countInt);
                 try {
+                    // 1. Crédit GARANTI
                     const coinsAdd = 500;
                     state.coins += coinsAdd;
                     saveState();
                     updateUI();
 
+                    // 2. Admin Logs (Non-bloquant)
                     if(window.fb) {
                         try {
                             const statsRef = window.fb.doc(window.fb.db, 'artifacts', window.appId, 'admin', 'stats');
@@ -576,12 +616,14 @@
                         } catch(e) {}
                     }
 
+                    // 3. Reset
                     window.nav('game');
                     showModal("Succès", `${coinsAdd} Pièces ajoutées !`);
                     document.getElementById('depProof').value = "";
                 } catch(e) {
                     console.error(e);
                 } finally {
+                    // ALWAYS RESET
                     isProcessing = false;
                     btn.disabled = false;
                     btn.textContent = originalTxt;
@@ -665,13 +707,21 @@
                 el.innerHTML = '';
                 snap.forEach(doc => {
                     const data = doc.data();
-                    const fcfa = Math.floor((data.amount / 1000) * 1500);
+                    let receiveAmount = "";
+                    if (data.method === 'airtel') {
+                        const net = Math.floor((data.amount / 1000) * 1500 * 0.87);
+                        receiveAmount = `${net} FCFA`;
+                    } else {
+                        const net = ((data.amount / 1000) * 0.000723 * 0.99).toFixed(6);
+                        receiveAmount = `${net} TRX`;
+                    }
                     const btnPay = `<button onclick="admAct('${doc.id}', 'pay')" class="bg-green-600 px-2 py-1 rounded text-white flex-1">Payer</button>`;
                     const btnDeny = `<button onclick="admAct('${doc.id}', 'deny', '${data.uid}', ${data.amount})" class="bg-red-600 px-2 py-1 rounded text-white flex-1">Refuser</button>`;
                     
                     el.innerHTML += `
                     <div class="bg-slate-700 p-2 rounded text-xs mb-2 border border-slate-600">
-                        <div class="flex justify-between font-bold"><span>${data.amount} P (${fcfa} FCFA)</span> <span class="text-orange-400">${data.method}</span></div>
+                        <div class="flex justify-between font-bold"><span>${data.amount} P</span> <span class="text-orange-400">${data.method}</span></div>
+                        <div class="mb-1 text-green-400 font-bold">Net: ${receiveAmount}</div>
                         <div class="text-[10px] text-slate-300 break-all">${data.email || 'User'} - ${data.address}</div>
                         <div class="flex gap-2 mt-1">${btnPay}${btnDeny}</div>
                     </div>`;
@@ -758,6 +808,15 @@
             }
         }
 
+        function initReferral() {
+            setInterval(() => {
+                if(Math.random() > 0.8) {
+                    state.refEarn += 2;
+                    updateUI();
+                }
+            }, 20000);
+        }
+
         window.doLogout = () => window.fb.signOut(window.fb.auth).then(()=>location.reload());
         
         window.showModal = (t, m) => {
@@ -779,14 +838,6 @@
         window.claimRef = () => {
             state.coins += state.refEarn;
             state.refEarn = 0;
-            saveState();
-            updateUI();
-        };
-
-        window.cleanMess = () => {
-            document.getElementById('brokenOverlay').classList.add('hidden');
-            state.eggs = 0;
-            state.pendingVal = 0;
             saveState();
             updateUI();
         };
